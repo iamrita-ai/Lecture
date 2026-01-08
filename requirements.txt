@@ -10,3 +10,4 @@ dnspython==2.4.2
 gunicorn==21.2.0
 aiofiles==23.2.1
 psutil==5.9.6
+m3u8==3.5.0
