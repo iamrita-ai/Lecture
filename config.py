@@ -34,3 +34,19 @@ class Config:
     # Flood Control (Optional)
     FLOOD_SLEEP = 5  # Default sleep time between files
     ETA_UPDATE_INTERVAL = 2  # Update ETA every 2 seconds
+
+# Platform Configuration
+from config.platforms_config import PLATFORM_CONFIGS
+
+# Helper to get platform URLs
+def get_platform_url(platform_id: str) -> str:
+    """Get platform website URL"""
+    urls = {
+        "rgvikramjeet": "https://rankersgurukul.com",
+        "pw": "https://www.pw.live",
+        "unacademy": "https://unacademy.com",
+        "vedantu": "https://www.vedantu.com",
+        "carrierwill": "https://carrierwill.in",
+        "studyiq": "https://www.studyiq.com",
+    }
+    return urls.get(platform_id, "https://google.com")
