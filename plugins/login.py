@@ -3,6 +3,7 @@ from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQ
 from config import Config
 from utils.session import set_user_state, get_user_state, clear_user_state, update_user_data
 import re
+import asyncio
 
 # Comprehensive Indian Coaching Apps
 COACHING_APPS = {
@@ -58,7 +59,7 @@ async def login_command(client: Client, message: Message):
             "• Unlimited downloads\n\n"
             "Contact owner for premium!",
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("👤 Contact Owner", url=f"tg://user?id={Config.OWNERS[0]}")]
+                [InlineKeyboardButton("👤 Contact Owner", url="https://t.me/technicalserena")]
             ])
         )
         return
@@ -163,9 +164,9 @@ async def cancel_login_callback(client: Client, query: CallbackQuery):
         ])
     )
 
-@Client.on_message(filters.text & filters.private & ~filters.command(['start', 'help', 'login', 'setting', 'settings', 'lock', 'unlock', 'premium', 'rem', 'stats', 'ping', 'broadcast', 'cancel']))
+@Client.on_message(filters.text & filters.private & ~filters.command(['start', 'help', 'login', 'setting', 'settings', 'lock', 'unlock', 'premium', 'rem', 'stats', 'ping', 'broadcast', 'cancel']), group=1)
 async def handle_user_input(client: Client, message: Message):
-    """Handle user text input based on current state"""
+    """Handle user text input based on current state - PRIORITY HANDLER"""
     user_id = message.from_user.id
     
     # Check if bot is locked
@@ -185,23 +186,8 @@ async def handle_user_input(client: Client, message: Message):
     elif state == 'awaiting_batch_id':
         await handle_batch_id(client, message, data)
     else:
-        # Check if it's a direct download link
-        if is_valid_url(message.text):
-            await handle_single_download(client, message)
-        else:
-            # Invalid command
-            await message.reply_text(
-                "❌ **Invalid Input!**\n\n"
-                "**Available Commands:**\n"
-                "• `/start` - Start the bot\n"
-                "• `/help` - Get help\n"
-                "• `/login` - Login to platform\n"
-                "• `/setting` - Settings\n"
-                "• `/cancel` - Cancel task\n\n"
-                "**Or send:**\n"
-                "• Direct video/PDF link to download\n"
-                "• TXT file with batch links"
-            )
+        # No active session, let download.py handler take over
+        pass
 
 async def handle_phone_number(client: Client, message: Message, data):
     """Process phone number input"""
@@ -320,6 +306,7 @@ async def batch_selected_callback(client: Client, query: CallbackQuery):
 async def generate_batch_txt(client, message, batch_id, user_id):
     """Generate TXT file with batch content"""
     import aiofiles
+    import os
     
     # Demo content
     content = f"""# Batch: {batch_id}
@@ -337,8 +324,11 @@ async def generate_batch_txt(client, message, batch_id, user_id):
 # Send this file back to download all content!
 """
     
+    # Create downloads directory
+    os.makedirs("downloads", exist_ok=True)
+    
     # Save to file
-    filename = f"batch_{batch_id}_{user_id}.txt"
+    filename = f"downloads/batch_{batch_id}_{user_id}.txt"
     async with aiofiles.open(filename, 'w') as f:
         await f.write(content)
     
@@ -365,7 +355,6 @@ async def generate_batch_txt(client, message, batch_id, user_id):
     clear_user_state(user_id)
     
     # Delete file
-    import os
     try:
         os.remove(filename)
     except:
@@ -378,17 +367,3 @@ async def handle_batch_id(client: Client, message: Message, data):
     
     status_msg = await message.reply_text("📝 **Generating batch content...**")
     await generate_batch_txt(client, status_msg, batch_id, user_id)
-
-def is_valid_url(text):
-    """Check if text is a valid URL"""
-    url_pattern = re.compile(
-        r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+'
-    )
-    return bool(url_pattern.match(text))
-
-async def handle_single_download(client: Client, message: Message):
-    """Handle single file download from direct link"""
-    from plugins.download import download_single_file
-    await download_single_file(client, message)
-
-import asyncio
