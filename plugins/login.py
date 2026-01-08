@@ -1,11 +1,17 @@
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, Message
 from config import Config
-from utils.session import set_user_state, get_user_state, clear_user_state, update_user_data
+from utils.session import (
+    set_user_state, get_user_state, clear_user_state, 
+    update_user_data, get_user_data, set_api_client, get_api_client
+)
+from utils.platform_apis import get_platform_api
 import re
 import asyncio
+import aiofiles
+import os
 
-# All Indian Coaching Apps with their websites
+# All Indian Coaching Apps
 COACHING_APPS = {
     "rgvikramjeet": {"name": "🎖️ RG Vikramjeet", "icon": "🎖️", "url": "https://rankersgurukul.com"},
     "pw": {"name": "📚 Physics Wallah", "icon": "📚", "url": "https://www.pw.live"},
@@ -19,14 +25,14 @@ COACHING_APPS = {
     "studyiq": {"name": "🧠 Study IQ", "icon": "🧠", "url": "https://www.studyiq.com"},
     "exampur": {"name": "📘 Exampur", "icon": "📘", "url": "https://exampur.com"},
     "utkarsh": {"name": "⭐ Utkarsh", "icon": "⭐", "url": "https://utkarsh.com"},
-    "rojgarwithankit": {"name": "💼 Rojgar with Ankit", "icon": "💼", "url": "https://play.google.com/store/apps/details?id=com.rojgarwithankit"},
+    "rojgarwithankit": {"name": "💼 Rojgar with Ankit", "icon": "💼", "url": "https://rojgarwithankit.com"},
     "vidyakul": {"name": "🎬 Vidyakul", "icon": "🎬", "url": "https://vidyakul.com"},
     "aakash": {"name": "🏆 Aakash", "icon": "🏆", "url": "https://www.aakash.ac.in"},
     "khanglobal": {"name": "🌍 Khan Global Studies", "icon": "🌍", "url": "https://khanglobalstudies.com"},
-    "targetwithankit": {"name": "🎯 Target with Ankit", "icon": "🎯", "url": "https://play.google.com/store/apps/details?id=com.targetwithankit"},
+    "targetwithankit": {"name": "🎯 Target with Ankit", "icon": "🎯", "url": "https://targetwithankit.com"},
     "edurev": {"name": "📚 EduRev", "icon": "📚", "url": "https://edurev.in"},
     "selectionway": {"name": "🛣️ Selection Way", "icon": "🛣️", "url": "https://selectionway.com"},
-    "parmaarssc": {"name": "📋 Parmaar SSC", "icon": "📋", "url": "https://play.google.com/store/apps/details?id=com.parmaarssc"},
+    "parmaarssc": {"name": "📋 Parmaar SSC", "icon": "📋", "url": "https://parmaarssc.com"},
     "sscmaker": {"name": "🔧 SSC Maker", "icon": "🔧", "url": "https://sscmaker.in"},
     "smartkida": {"name": "🧩 SmartKida", "icon": "🧩", "url": "https://smartkida.com"},
 }
@@ -43,12 +49,13 @@ async def login_command(client: Client, message: Message):
     if not is_premium:
         await message.reply_text(
             "⚠️ **Premium Feature!**\n\n"
-            "Login and batch download require premium.\n\n"
-            "**Free Users:**\n"
+            "Login and batch download require premium access.\n\n"
+            "**Free Users Can:**\n"
             "• Send direct video/PDF links (10/day)\n\n"
-            "**Premium Users:**\n"
-            "• App login + batch downloads\n"
-            "• Unlimited downloads\n\n"
+            "**Premium Users Get:**\n"
+            "• Platform login + batch extraction\n"
+            "• Unlimited downloads\n"
+            "• M3U8 support\n\n"
             "Contact owner for premium!",
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("👤 Contact Owner", url="https://t.me/technicalserena")]
@@ -78,7 +85,7 @@ async def show_apps_menu(message):
     
     await message.reply_text(
         "📚 **Select Your Coaching Platform:**\n\n"
-        "Choose the app/website you want to extract content from:",
+        "Choose the platform you want to extract content from.",
         reply_markup=InlineKeyboardMarkup(buttons)
     )
 
@@ -111,7 +118,7 @@ async def login_menu_callback(client: Client, query: CallbackQuery):
     
     await query.message.edit_text(
         "📚 **Select Your Coaching Platform:**\n\n"
-        "Choose the app/website you want to extract content from:",
+        "Choose the platform you want to extract content from.",
         reply_markup=InlineKeyboardMarkup(buttons)
     )
 
@@ -123,7 +130,11 @@ async def app_selected_callback(client: Client, query: CallbackQuery):
     app_url = app_data["url"]
     user_id = query.from_user.id
     
-    set_user_state(user_id, 'awaiting_phone', {
+    # Initialize API client
+    api_client = get_platform_api(app_id)
+    set_api_client(user_id, app_id, api_client)
+    
+    set_user_state(user_id, 'awaiting_credentials', {
         'app_id': app_id, 
         'app_name': app_name,
         'app_url': app_url
@@ -132,12 +143,17 @@ async def app_selected_callback(client: Client, query: CallbackQuery):
     await query.message.edit_text(
         f"📱 **{app_name}**\n"
         f"🌐 Website: `{app_url}`\n\n"
-        f"📞 **Send Your Registered Phone Number:**\n\n"
-        f"**Examples:**\n"
-        f"• `+919876543210`\n"
-        f"• `9876543210`\n\n"
-        f"⚠️ **Important:** This should be the phone number registered on {app_name}\n\n"
-        f"💡 After sending phone, you'll get OTP on your app/SMS\n"
+        f"━━━━━━━━━━━━━━━━━━\n\n"
+        f"**🔐 Login Options:**\n\n"
+        f"**Option 1: Phone + OTP (Recommended)**\n"
+        f"Send your phone number:\n"
+        f"Example: `9876543210`\n\n"
+        f"**Option 2: Phone + Password**\n"
+        f"Send in this format:\n"
+        f"`phone*password`\n"
+        f"Example: `9876543210*mypass123`\n\n"
+        f"━━━━━━━━━━━━━━━━━━\n\n"
+        f"⚠️ Use the credentials registered on **{app_name}**\n\n"
         f"Use /cancel to stop",
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("🌐 Open Website", url=app_url)],
@@ -149,6 +165,7 @@ async def app_selected_callback(client: Client, query: CallbackQuery):
 async def cancel_login_callback(client: Client, query: CallbackQuery):
     user_id = query.from_user.id
     clear_user_state(user_id)
+    clear_api_client(user_id)
     
     await query.message.edit_text(
         "❌ **Login Cancelled**\n\n"
@@ -170,242 +187,351 @@ async def handle_user_input(client: Client, message: Message):
     state = session.get('state')
     data = session.get('data', {})
     
-    if state == 'awaiting_phone':
-        await handle_phone_number(client, message, data)
+    if state == 'awaiting_credentials':
+        await handle_credentials(client, message, data)
     elif state == 'awaiting_otp':
         await handle_otp(client, message, data)
-    elif state == 'awaiting_batch_links':
-        await handle_batch_links(client, message, data)
     else:
         pass
 
-async def handle_phone_number(client: Client, message: Message, data):
-    """Process phone number input"""
+async def handle_credentials(client: Client, message: Message, data):
+    """Handle phone number or phone*password input"""
     user_id = message.from_user.id
-    phone = message.text.strip()
-    app_name = data.get('app_name', 'Platform')
-    app_url = data.get('app_url', '')
+    text = message.text.strip()
+    app_id = data.get('app_id')
+    app_name = data.get('app_name')
     
-    phone_cleaned = re.sub(r'[^\d+]', '', phone)
+    # Check if it's phone*password format
+    if '*' in text:
+        parts = text.split('*', 1)
+        phone = parts[0].strip()
+        password = parts[1].strip()
+        
+        await login_with_password(client, message, user_id, app_id, app_name, phone, password)
+    else:
+        # Just phone number - will send OTP
+        phone = text.strip()
+        await send_otp_to_phone(client, message, user_id, app_id, app_name, phone, data)
+
+async def login_with_password(client, message, user_id, app_id, app_name, phone, password):
+    """Login using phone and password"""
+    status = await message.reply_text("🔐 **Logging in with password...**")
     
-    if len(phone_cleaned) < 10:
-        await message.reply_text(
-            "❌ **Invalid Phone Number!**\n\n"
-            "Please send a valid phone number.\n\n"
-            "**Examples:**\n"
-            "• +919876543210\n"
-            "• 9876543210"
-        )
+    # Clean phone number
+    phone = re.sub(r'\D', '', phone)
+    
+    # Get API client
+    api_client = get_api_client(user_id, app_id)
+    if not api_client:
+        await status.edit_text("❌ **Error:** API client not found. Please try /login again.")
         return
     
-    if not phone_cleaned.startswith('+'):
-        if not phone_cleaned.startswith('91'):
-            phone_cleaned = '+91' + phone_cleaned
+    try:
+        # Login with password
+        token = await api_client.login_with_password(phone, password)
+        
+        if token:
+            await status.edit_text("✅ **Login Successful!**\n\n⏳ Fetching your batches...")
+            await show_user_batches(client, message, user_id, app_id, app_name, api_client)
         else:
-            phone_cleaned = '+' + phone_cleaned
+            await status.edit_text(
+                "❌ **Login Failed!**\n\n"
+                "Please check:\n"
+                "• Phone number is correct\n"
+                "• Password is correct\n"
+                "• Account exists on platform\n\n"
+                "Try again with /login"
+            )
+            clear_user_state(user_id)
+            
+    except Exception as e:
+        await status.edit_text(f"❌ **Error:** {str(e)}\n\nTry again with /login")
+        clear_user_state(user_id)
+
+async def send_otp_to_phone(client, message, user_id, app_id, app_name, phone, data):
+    """Send OTP to user's phone via platform API"""
+    status = await message.reply_text("📱 **Sending OTP to your phone...**")
     
-    update_user_data(user_id, 'phone', phone_cleaned)
-    set_user_state(user_id, 'awaiting_otp', data)
+    # Clean phone number
+    phone = re.sub(r'\D', '', phone)
     
-    await message.reply_text(
-        f"✅ **Phone Number Saved**\n\n"
-        f"📱 Number: `{phone_cleaned}`\n"
-        f"📲 Platform: **{app_name}**\n\n"
-        f"🔐 **Now Enter Your OTP:**\n\n"
-        f"**Steps:**\n"
-        f"1. Open {app_name} app/website\n"
-        f"2. Login with `{phone_cleaned}`\n"
-        f"3. You'll receive OTP via SMS/App\n"
-        f"4. Send that OTP here\n\n"
-        f"**Format:** `123456` (6 digits without spaces)\n\n"
-        f"💡 Example: If OTP is 5 7 2 0 0 2, send: `572002`\n\n"
-        f"Use /cancel to stop",
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("🌐 Open App/Website", url=app_url)]
-        ])
-    )
+    # Get API client
+    api_client = get_api_client(user_id, app_id)
+    if not api_client:
+        await status.edit_text("❌ **Error:** API client not found. Please try /login again.")
+        return
+    
+    try:
+        # Send OTP via API
+        otp_sent = await api_client.send_otp(phone)
+        
+        if otp_sent:
+            update_user_data(user_id, 'phone', phone)
+            set_user_state(user_id, 'awaiting_otp', data)
+            
+            await status.edit_text(
+                f"✅ **OTP Sent Successfully!**\n\n"
+                f"📱 Phone: `+91{phone}`\n"
+                f"📲 Platform: **{app_name}**\n\n"
+                f"━━━━━━━━━━━━━━━━━━\n\n"
+                f"🔐 **Check your phone for OTP**\n\n"
+                f"OTP sent via SMS/App notification\n\n"
+                f"**Send the OTP here:**\n"
+                f"• 4-digit or 6-digit code\n"
+                f"• Example: `123456` or `1234`\n\n"
+                f"⏱️ OTP valid for 5-10 minutes\n\n"
+                f"Use /cancel to stop"
+            )
+        else:
+            await status.edit_text(
+                "❌ **Failed to send OTP!**\n\n"
+                "Possible reasons:\n"
+                "• Phone number not registered\n"
+                "• Platform API unavailable\n"
+                "• Network issue\n\n"
+                "**Try:**\n"
+                "• Check phone number\n"
+                "• Use phone*password format\n"
+                "• Try again with /login"
+            )
+            clear_user_state(user_id)
+            
+    except Exception as e:
+        await status.edit_text(f"❌ **Error:** {str(e)}\n\nTry again with /login")
+        clear_user_state(user_id)
 
 async def handle_otp(client: Client, message: Message, data):
-    """Process OTP and request batch information"""
+    """Verify OTP and login"""
     user_id = message.from_user.id
     otp = message.text.strip().replace(' ', '')
-    app_name = data.get('app_name', 'Platform')
-    phone = get_user_state(user_id)['data'].get('phone', '')
+    app_id = data.get('app_id')
+    app_name = data.get('app_name')
+    phone = get_user_data(user_id, 'phone')
     
-    if not otp.isdigit() or len(otp) != 6:
+    # Validate OTP (4 or 6 digits)
+    if not otp.isdigit() or len(otp) not in [4, 6]:
         await message.reply_text(
             "❌ **Invalid OTP!**\n\n"
-            "Please send 6-digit OTP.\n\n"
-            "**Example:** 572002\n\n"
+            "Please send 4 or 6 digit OTP.\n\n"
+            "**Example:** `123456`\n\n"
             "Use /cancel to stop."
         )
         return
     
-    status_msg = await message.reply_text("🔐 **Processing Login...**")
+    status = await message.reply_text("🔐 **Verifying OTP...**")
     
-    await asyncio.sleep(1)
-    
-    update_user_data(user_id, 'otp', otp)
-    update_user_data(user_id, 'logged_in', True)
-    
-    await status_msg.edit_text(
-        f"✅ **Login Successful!**\n\n"
-        f"📱 Phone: `{phone}`\n"
-        f"🔐 OTP: `{otp}`\n"
-        f"📲 Platform: **{app_name}**\n\n"
-        f"━━━━━━━━━━━━━━━━━━\n\n"
-        f"**📦 Now Send Your Batch/Course Links:**\n\n"
-        f"**Instructions:**\n"
-        f"1. Open {app_name} app/website\n"
-        f"2. Go to your purchased batch/course\n"
-        f"3. Copy ALL video/PDF links\n"
-        f"4. Send them here in this format:\n\n"
-        f"```\n"
-        f"Video Title 1 | http://link1.m3u8\n"
-        f"Video Title 2 | http://link2.m3u8\n"
-        f"PDF Title | http://pdf-link.pdf\n"
-        f"```\n\n"
-        f"**OR**\n\n"
-        f"Send batch links one by one, I'll collect them!\n\n"
-        f"When done, type: `/done`\n\n"
-        f"💡 Use /cancel to stop",
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("ℹ️ How to Get Links?", callback_data="help_links")]
-        ])
-    )
-    
-    set_user_state(user_id, 'awaiting_batch_links', data)
-    update_user_data(user_id, 'collected_links', [])
-
-@Client.on_callback_query(filters.regex("^help_links$"))
-async def help_links_callback(client: Client, query: CallbackQuery):
-    await query.answer(
-        "1. Open app in browser\n"
-        "2. Open Developer Tools (F12)\n"
-        "3. Go to Network tab\n"
-        "4. Play a video\n"
-        "5. Look for .m3u8 links\n"
-        "6. Copy and send here!",
-        show_alert=True
-    )
-
-async def handle_batch_links(client: Client, message: Message, data):
-    """Collect batch links from user"""
-    user_id = message.from_user.id
-    text = message.text.strip()
-    
-    if text.lower() == '/done':
-        await generate_batch_file(client, message, user_id, data)
+    # Get API client
+    api_client = get_api_client(user_id, app_id)
+    if not api_client:
+        await status.edit_text("❌ **Error:** API client not found. Please try /login again.")
         return
     
-    session = get_user_state(user_id)
-    collected = session['data'].get('collected_links', [])
-    
-    # Parse links
-    if '|' in text:
-        # Format: Title | URL
-        collected.append(text)
-        update_user_data(user_id, 'collected_links', collected)
-        await message.reply_text(
-            f"✅ **Link Added!**\n\n"
-            f"📊 Total collected: {len(collected)}\n\n"
-            f"Send more links or type `/done` when finished."
-        )
-    elif text.startswith('http'):
-        # Just URL, auto-generate title
-        title = f"Video {len(collected) + 1}"
-        collected.append(f"{title} | {text}")
-        update_user_data(user_id, 'collected_links', collected)
-        await message.reply_text(
-            f"✅ **Link Added!**\n\n"
-            f"📊 Total collected: {len(collected)}\n"
-            f"📝 Auto-titled as: `{title}`\n\n"
-            f"Send more or type `/done`"
-        )
-    else:
-        await message.reply_text(
-            "❌ **Invalid Format!**\n\n"
-            "**Send in format:**\n"
-            "`Title | http://link.m3u8`\n\n"
-            "**OR just the link:**\n"
-            "`http://link.m3u8`\n\n"
-            "Type `/done` when finished."
-        )
-
-async def generate_batch_file(client, message, user_id, data):
-    """Generate TXT file with all collected links"""
-    import aiofiles
-    import os
-    
-    session = get_user_state(user_id)
-    collected_links = session['data'].get('collected_links', [])
-    
-    if not collected_links:
-        await message.reply_text(
-            "❌ **No Links Collected!**\n\n"
-            "Please send at least one video/PDF link."
-        )
-        return
-    
-    app_name = data.get('app_name', 'Platform')
-    phone = session['data'].get('phone', 'unknown')
-    
-    status = await message.reply_text("📝 **Generating TXT file...**")
-    
-    # Create content
-    content = f"# Batch Links - {app_name}\n"
-    content += f"# Phone: {phone}\n"
-    content += f"# Total Links: {len(collected_links)}\n"
-    content += f"# Generated by Serena Lec\n\n"
-    
-    for link in collected_links:
-        content += f"{link}\n"
-    
-    # Save to file
-    os.makedirs("downloads", exist_ok=True)
-    filename = f"downloads/batch_{user_id}_{int(asyncio.get_event_loop().time())}.txt"
-    
-    async with aiofiles.open(filename, 'w', encoding='utf-8') as f:
-        await f.write(content)
-    
-    # Send file
-    await client.send_document(
-        chat_id=message.chat.id,
-        document=filename,
-        caption=(
-            f"✅ **Batch TXT File Generated!**\n\n"
-            f"📲 Platform: **{app_name}**\n"
-            f"📊 Total Links: **{len(collected_links)}**\n\n"
-            f"**Next Steps:**\n"
-            f"1. This file contains all your batch links\n"
-            f"2. Send this file back to me\n"
-            f"3. I'll download all videos/PDFs!\n\n"
-            f"✨ Ready to download!"
-        )
-    )
-    
-    await status.delete()
-    
-    # Clear session
-    clear_user_state(user_id)
-    
-    # Delete file
     try:
-        os.remove(filename)
-    except:
-        pass
+        # Verify OTP via API
+        token = await api_client.verify_otp(phone, otp)
+        
+        if token:
+            update_user_data(user_id, 'auth_token', token)
+            await status.edit_text("✅ **OTP Verified!**\n\n⏳ Fetching your batches...")
+            await show_user_batches(client, message, user_id, app_id, app_name, api_client)
+        else:
+            await status.edit_text(
+                "❌ **OTP Verification Failed!**\n\n"
+                "Possible reasons:\n"
+                "• Wrong OTP\n"
+                "• OTP expired\n"
+                "• Already used\n\n"
+                "Try /login again to get new OTP"
+            )
+            clear_user_state(user_id)
+            
+    except Exception as e:
+        await status.edit_text(f"❌ **Error:** {str(e)}\n\nTry /login again")
+        clear_user_state(user_id)
 
-@Client.on_message(filters.command("done"))
-async def done_command(client: Client, message: Message):
-    """Finish collecting links and generate file"""
-    user_id = message.from_user.id
-    session = get_user_state(user_id)
-    
-    if session.get('state') == 'awaiting_batch_links':
-        data = session.get('data', {})
-        await generate_batch_file(client, message, user_id, data)
-    else:
+async def show_user_batches(client, message, user_id, app_id, app_name, api_client):
+    """Fetch and display user's purchased batches"""
+    try:
+        # Get batches from API
+        batches = await api_client.get_batches()
+        
+        if not batches:
+            await message.reply_text(
+                "❌ **No Batches Found!**\n\n"
+                "You don't have any purchased courses on this platform.\n\n"
+                "Or the API returned empty data."
+            )
+            clear_user_state(user_id)
+            return
+        
+        # Create buttons
+        buttons = []
+        for batch in batches[:20]:  # Limit to 20 batches
+            batch_id = batch.get('id') or batch.get('batch_id') or batch.get('course_id')
+            batch_name = batch.get('name') or batch.get('title') or f"Batch {batch_id}"
+            
+            # Truncate long names
+            if len(batch_name) > 40:
+                batch_name = batch_name[:37] + "..."
+            
+            buttons.append([
+                InlineKeyboardButton(
+                    f"📦 {batch_name}", 
+                    callback_data=f"batch_{app_id}_{batch_id}"
+                )
+            ])
+        
+        buttons.append([InlineKeyboardButton("❌ Cancel", callback_data="cancel_login")])
+        
         await message.reply_text(
-            "❌ **No active batch collection!**\n\n"
-            "Use /login to start."
+            f"✅ **Login Successful!**\n\n"
+            f"📚 **{app_name}**\n"
+            f"📦 **Your Purchased Batches:** ({len(batches)})\n\n"
+            f"Select a batch to extract content:",
+            reply_markup=InlineKeyboardMarkup(buttons)
         )
+        
+        # Update state
+        update_user_data(user_id, 'batches', batches)
+        
+    except Exception as e:
+        await message.reply_text(f"❌ **Error fetching batches:** {str(e)}")
+        clear_user_state(user_id)
+
+@Client.on_callback_query(filters.regex("^batch_"))
+async def batch_selected_callback(client: Client, query: CallbackQuery):
+    """Handle batch selection"""
+    user_id = query.from_user.id
+    
+    # Parse callback data
+    parts = query.data.split("_")
+    app_id = parts[1]
+    batch_id = "_".join(parts[2:])  # In case batch_id has underscores
+    
+    await query.message.edit_text(
+        f"📝 **Extracting batch content...**\n\n"
+        f"⏳ This may take a few moments..."
+    )
+    
+    # Get API client
+    api_client = get_api_client(user_id, app_id)
+    if not api_client:
+        await query.message.edit_text("❌ **Session expired!** Use /login again.")
+        return
+    
+    try:
+        # Get batch content from API
+        content = await api_client.get_batch_content(batch_id)
+        
+        if not content:
+            await query.message.edit_text(
+                "❌ **No content found in this batch!**\n\n"
+                "The batch might be empty or API error occurred."
+            )
+            return
+        
+        # Generate TXT file
+        await generate_batch_txt_file(client, query.message, user_id, app_id, batch_id, content)
+        
+    except Exception as e:
+        await query.message.edit_text(f"❌ **Error:** {str(e)}")
+
+async def generate_batch_txt_file(client, message, user_id, app_id, batch_id, content):
+    """Generate TXT file with all batch content links"""
+    try:
+        app_name = COACHING_APPS.get(app_id, {}).get('name', 'Platform')
+        
+        # Parse content and extract links
+        lines = []
+        video_count = 0
+        pdf_count = 0
+        
+        for item in content:
+            # Extract title
+            title = (
+                item.get('title') or 
+                item.get('name') or 
+                item.get('lecture_name') or 
+                f"Content {len(lines) + 1}"
+            )
+            
+            # Extract URL (video or PDF)
+            url = (
+                item.get('video_url') or 
+                item.get('url') or 
+                item.get('link') or 
+                item.get('m3u8_url') or
+                item.get('hls_url') or
+                item.get('stream_url') or
+                item.get('pdf_url')
+            )
+            
+            if url:
+                # Clean title
+                title = title.replace('|', '-').strip()
+                
+                # Determine type
+                if any(ext in url.lower() for ext in ['.m3u8', '.mp4', '.mkv', 'video']):
+                    video_count += 1
+                elif '.pdf' in url.lower():
+                    pdf_count += 1
+                
+                lines.append(f"{title} | {url}")
+        
+        if not lines:
+            await message.edit_text(
+                "❌ **No downloadable links found!**\n\n"
+                "The batch content doesn't contain video/PDF URLs."
+            )
+            return
+        
+        # Create TXT content
+        txt_content = f"# Batch Content - {app_name}\n"
+        txt_content += f"# Batch ID: {batch_id}\n"
+        txt_content += f"# Videos: {video_count} | PDFs: {pdf_count}\n"
+        txt_content += f"# Total Items: {len(lines)}\n"
+        txt_content += f"# Generated by Serena Lec Bot\n\n"
+        txt_content += "\n".join(lines)
+        
+        # Save to file
+        os.makedirs("downloads", exist_ok=True)
+        filename = f"downloads/batch_{user_id}_{int(asyncio.get_event_loop().time())}.txt"
+        
+        async with aiofiles.open(filename, 'w', encoding='utf-8') as f:
+            await f.write(txt_content)
+        
+        # Send file
+        await client.send_document(
+            chat_id=message.chat.id,
+            document=filename,
+            caption=(
+                f"✅ **Batch TXT File Generated!**\n\n"
+                f"📚 **Platform:** {app_name}\n"
+                f"📦 **Batch ID:** `{batch_id}`\n"
+                f"🎥 **Videos:** {video_count}\n"
+                f"📄 **PDFs:** {pdf_count}\n"
+                f"📊 **Total:** {len(lines)}\n\n"
+                f"━━━━━━━━━━━━━━━━━━\n\n"
+                f"**📥 Next Steps:**\n"
+                f"1. This file contains all download links\n"
+                f"2. **Send this file back to me**\n"
+                f"3. I'll download all videos/PDFs!\n\n"
+                f"✨ **M3U8 videos will be converted to MP4**"
+            )
+        )
+        
+        await message.delete()
+        
+        # Clear session
+        clear_user_state(user_id)
+        clear_api_client(user_id)
+        
+        # Delete file
+        try:
+            os.remove(filename)
+        except:
+            pass
+        
+    except Exception as e:
+        await message.edit_text(f"❌ **Error generating TXT:** {str(e)}")
+        print(f"TXT Generation Error: {e}")
