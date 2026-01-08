@@ -3,154 +3,140 @@ import asyncio
 from typing import Dict, List, Optional
 import json
 import re
+from config.platforms_config import get_platform_config
 
-class BasePlatformAPI:
-    """Base class for all platform APIs"""
+class UniversalPlatformAPI:
+    """Universal API client that works with any platform using config"""
     
-    def __init__(self):
+    def __init__(self, platform_id: str):
+        self.platform_id = platform_id
+        self.config = get_platform_config(platform_id)
         self.session = None
         self.auth_token = None
-        self.headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'Accept-Language': 'en-US,en;q=0.9'
-        }
+        
+        # Load config
+        self.base_url = self.config.get('base_url')
+        self.endpoints = self.config.get('api_endpoints', {})
+        self.headers = self.config.get('headers', {})
+        self.payload_format = self.config.get('login_payload_format', {})
+        self.token_key = self.config.get('response_token_key', 'token')
+        self.data_key = self.config.get('response_data_key', 'data')
     
     async def ensure_session(self):
         """Ensure session exists"""
         if not self.session or self.session.closed:
-            self.session = aiohttp.ClientSession()
+            timeout = aiohttp.ClientTimeout(total=30)
+            self.session = aiohttp.ClientSession(timeout=timeout)
     
     async def close_session(self):
         """Close session"""
         if self.session and not self.session.closed:
             await self.session.close()
-
-
-class RGVikramjeetAPI(BasePlatformAPI):
-    """RG Vikramjeet / Rankers Gurukul API Client"""
     
-    # Try multiple possible API endpoints
-    BASE_URLS = [
-        "https://api.rankersgurukul.com",
-        "https://rankersgurukul.com/api",
-        "https://www.rankersgurukul.com/api",
-        "https://backend.rankersgurukul.com"
-    ]
-    
-    WEB_URL = "https://rankersgurukul.com"
+    def format_payload(self, template: dict, **kwargs) -> dict:
+        """Format payload with actual values"""
+        formatted = {}
+        for key, value in template.items():
+            if isinstance(value, str):
+                formatted[key] = value.format(**kwargs)
+            else:
+                formatted[key] = value
+        return formatted
     
     async def login_with_password(self, phone: str, password: str) -> Optional[str]:
-        """Login with phone and password"""
+        """Universal login method"""
         await self.ensure_session()
         
         # Clean phone
         phone = re.sub(r'\D', '', phone)
-        if not phone.startswith('91'):
+        if not phone.startswith('91') and len(phone) == 10:
             phone = '91' + phone
         
-        # Try different API endpoints and payload formats
-        login_attempts = [
-            # Attempt 1: Standard format
-            {
-                "endpoint": "/api/v1/login",
-                "payload": {"mobile": phone, "password": password}
-            },
-            # Attempt 2: Email/username format
-            {
-                "endpoint": "/api/login",
-                "payload": {"username": phone, "password": password}
-            },
-            # Attempt 3: Phone without country code
-            {
-                "endpoint": "/api/v1/auth/login",
-                "payload": {"phone": phone[-10:], "password": password}
-            },
-            # Attempt 4: With country code separate
-            {
-                "endpoint": "/login",
-                "payload": {"country_code": "+91", "mobile": phone[-10:], "password": password}
-            },
-            # Attempt 5: Email format (if user has email)
-            {
-                "endpoint": "/api/user/login",
-                "payload": {"mobile": phone, "password": password, "type": "mobile"}
-            }
-        ]
+        # Get login endpoint
+        login_endpoint = self.endpoints.get('login')
+        if not login_endpoint:
+            print(f"❌ No login endpoint configured for {self.platform_id}")
+            return None
         
-        last_error = None
+        # Format payload
+        payload = self.format_payload(self.payload_format, phone=phone, password=password)
         
-        # Try each base URL with each login attempt
-        for base_url in self.BASE_URLS:
-            for attempt in login_attempts:
-                try:
-                    url = f"{base_url}{attempt['endpoint']}"
-                    
-                    async with self.session.post(
-                        url,
-                        json=attempt['payload'],
-                        headers=self.headers,
-                        timeout=aiohttp.ClientTimeout(total=15)
-                    ) as resp:
-                        if resp.status == 200:
-                            try:
-                                data = await resp.json()
-                                # Try different token field names
-                                token = (
-                                    data.get('token') or 
-                                    data.get('access_token') or 
-                                    data.get('auth_token') or
-                                    data.get('jwt') or
-                                    data.get('data', {}).get('token')
-                                )
-                                
-                                if token:
-                                    self.auth_token = token
-                                    print(f"✅ Login successful with {base_url}{attempt['endpoint']}")
-                                    return token
-                            except:
-                                pass
+        # Make request
+        url = f"{self.base_url}{login_endpoint}"
+        
+        try:
+            print(f"🔐 Attempting login to {url}")
+            print(f"📦 Payload: {payload}")
+            
+            async with self.session.post(
+                url,
+                json=payload,
+                headers=self.headers
+            ) as resp:
+                print(f"📡 Response Status: {resp.status}")
+                
+                if resp.status == 200:
+                    try:
+                        data = await resp.json()
+                        print(f"📥 Response: {json.dumps(data, indent=2)[:500]}")
                         
-                except Exception as e:
-                    last_error = str(e)
-                    continue
+                        # Try to extract token
+                        token = None
+                        
+                        # Direct key
+                        if self.token_key in data:
+                            token = data[self.token_key]
+                        # Nested in data
+                        elif self.data_key in data and isinstance(data[self.data_key], dict):
+                            token = data[self.data_key].get(self.token_key)
+                        # Try common alternatives
+                        else:
+                            for key in ['token', 'access_token', 'auth_token', 'jwt', 'authorization']:
+                                if key in data:
+                                    token = data[key]
+                                    break
+                        
+                        if token:
+                            self.auth_token = token
+                            print(f"✅ Login successful! Token: {token[:20]}...")
+                            return token
+                        else:
+                            print(f"⚠️ No token found in response")
+                    except Exception as e:
+                        print(f"❌ JSON Parse Error: {e}")
+                        text = await resp.text()
+                        print(f"📄 Response Text: {text[:500]}")
+                else:
+                    text = await resp.text()
+                    print(f"❌ Login failed: {resp.status} - {text[:200]}")
+                    
+        except Exception as e:
+            print(f"❌ Login Exception: {e}")
         
-        print(f"❌ All login attempts failed. Last error: {last_error}")
         return None
     
     async def send_otp(self, phone: str) -> bool:
-        """Send OTP to phone"""
+        """Send OTP"""
         await self.ensure_session()
         
         phone = re.sub(r'\D', '', phone)
-        if not phone.startswith('91'):
+        if not phone.startswith('91') and len(phone) == 10:
             phone = '91' + phone
         
-        # Try different endpoints
-        otp_endpoints = [
-            {"url": "/api/v1/send-otp", "payload": {"mobile": phone}},
-            {"url": "/api/send-otp", "payload": {"phone": phone}},
-            {"url": "/api/v1/auth/send-otp", "payload": {"mobile": phone, "type": "login"}},
-        ]
+        endpoint = self.endpoints.get('send_otp')
+        if not endpoint:
+            return False
         
-        for base_url in self.BASE_URLS:
-            for endpoint in otp_endpoints:
-                try:
-                    url = f"{base_url}{endpoint['url']}"
-                    async with self.session.post(
-                        url,
-                        json=endpoint['payload'],
-                        headers=self.headers,
-                        timeout=aiohttp.ClientTimeout(total=15)
-                    ) as resp:
-                        if resp.status == 200:
-                            data = await resp.json()
-                            if data.get('success') or data.get('status') == 'success':
-                                print(f"✅ OTP sent via {url}")
-                                return True
-                except:
-                    continue
+        url = f"{self.base_url}{endpoint}"
+        payload = {"mobile": phone, "phone": phone}
+        
+        try:
+            async with self.session.post(url, json=payload, headers=self.headers) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    return data.get('success', False) or data.get('status') == 'success'
+        except:
+            pass
         
         return False
     
@@ -159,237 +145,147 @@ class RGVikramjeetAPI(BasePlatformAPI):
         await self.ensure_session()
         
         phone = re.sub(r'\D', '', phone)
-        if not phone.startswith('91'):
+        if not phone.startswith('91') and len(phone) == 10:
             phone = '91' + phone
         
-        verify_endpoints = [
-            {"url": "/api/v1/verify-otp", "payload": {"mobile": phone, "otp": otp}},
-            {"url": "/api/verify-otp", "payload": {"phone": phone, "otp": otp}},
-            {"url": "/api/v1/auth/verify", "payload": {"mobile": phone, "otp": otp}},
-        ]
-        
-        for base_url in self.BASE_URLS:
-            for endpoint in verify_endpoints:
-                try:
-                    url = f"{base_url}{endpoint['url']}"
-                    async with self.session.post(
-                        url,
-                        json=endpoint['payload'],
-                        headers=self.headers,
-                        timeout=aiohttp.ClientTimeout(total=15)
-                    ) as resp:
-                        if resp.status == 200:
-                            data = await resp.json()
-                            token = data.get('token') or data.get('access_token')
-                            if token:
-                                self.auth_token = token
-                                return token
-                except:
-                    continue
-        
-        return None
-    
-    async def get_batches(self) -> List[Dict]:
-        """Get user batches"""
-        await self.ensure_session()
-        
-        if not self.auth_token:
-            return []
-        
-        headers = self.headers.copy()
-        headers['Authorization'] = f"Bearer {self.auth_token}"
-        
-        batch_endpoints = [
-            "/api/v1/my-courses",
-            "/api/v1/user/courses",
-            "/api/courses/purchased",
-            "/api/v1/batches",
-            "/api/user/batches",
-        ]
-        
-        for base_url in self.BASE_URLS:
-            for endpoint in batch_endpoints:
-                try:
-                    url = f"{base_url}{endpoint}"
-                    async with self.session.get(
-                        url,
-                        headers=headers,
-                        timeout=aiohttp.ClientTimeout(total=15)
-                    ) as resp:
-                        if resp.status == 200:
-                            data = await resp.json()
-                            batches = (
-                                data.get('courses') or 
-                                data.get('batches') or 
-                                data.get('data') or 
-                                []
-                            )
-                            if batches:
-                                return batches
-                except:
-                    continue
-        
-        return []
-    
-    async def get_batch_content(self, batch_id: str) -> List[Dict]:
-        """Get batch content"""
-        await self.ensure_session()
-        
-        if not self.auth_token:
-            return []
-        
-        headers = self.headers.copy()
-        headers['Authorization'] = f"Bearer {self.auth_token}"
-        
-        content_endpoints = [
-            f"/api/v1/course/{batch_id}/content",
-            f"/api/v1/batch/{batch_id}/lectures",
-            f"/api/course/{batch_id}/videos",
-            f"/api/v1/courses/{batch_id}/lessons",
-        ]
-        
-        for base_url in self.BASE_URLS:
-            for endpoint in content_endpoints:
-                try:
-                    url = f"{base_url}{endpoint}"
-                    async with self.session.get(
-                        url,
-                        headers=headers,
-                        timeout=aiohttp.ClientTimeout(total=15)
-                    ) as resp:
-                        if resp.status == 200:
-                            data = await resp.json()
-                            content = (
-                                data.get('content') or 
-                                data.get('lectures') or 
-                                data.get('lessons') or
-                                data.get('videos') or
-                                data.get('data') or 
-                                []
-                            )
-                            if content:
-                                return content
-                except:
-                    continue
-        
-        return []
-
-
-class PhysicsWallahAPI(BasePlatformAPI):
-    """Physics Wallah API"""
-    
-    BASE_URL = "https://api.pw.live"
-    
-    async def login_with_password(self, phone: str, password: str) -> Optional[str]:
-        await self.ensure_session()
-        
-        phone = re.sub(r'\D', '', phone)
-        
-        try:
-            async with self.session.post(
-                f"{self.BASE_URL}/v2/user/login",
-                json={"mobile": phone, "password": password},
-                headers=self.headers,
-                timeout=aiohttp.ClientTimeout(total=15)
-            ) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    self.auth_token = data.get('token')
-                    return self.auth_token
-        except Exception as e:
-            print(f"PW Login Error: {e}")
-        
-        return None
-    
-    async def send_otp(self, phone: str) -> bool:
-        await self.ensure_session()
-        
-        phone = re.sub(r'\D', '', phone)
-        
-        try:
-            async with self.session.post(
-                f"{self.BASE_URL}/v2/user/send-otp",
-                json={"mobile": phone},
-                headers=self.headers,
-                timeout=aiohttp.ClientTimeout(total=15)
-            ) as resp:
-                return resp.status == 200
-        except:
-            return False
-    
-    async def verify_otp(self, phone: str, otp: str) -> Optional[str]:
-        await self.ensure_session()
-        
-        phone = re.sub(r'\D', '', phone)
-        
-        try:
-            async with self.session.post(
-                f"{self.BASE_URL}/v2/user/verify-otp",
-                json={"mobile": phone, "otp": otp},
-                headers=self.headers,
-                timeout=aiohttp.ClientTimeout(total=15)
-            ) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    self.auth_token = data.get('token')
-                    return self.auth_token
-        except:
+        endpoint = self.endpoints.get('verify_otp')
+        if not endpoint:
             return None
+        
+        url = f"{self.base_url}{endpoint}"
+        payload = {"mobile": phone, "phone": phone, "otp": otp}
+        
+        try:
+            async with self.session.post(url, json=payload, headers=self.headers) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    token = data.get(self.token_key) or data.get('token')
+                    if token:
+                        self.auth_token = token
+                        return token
+        except:
+            pass
+        
+        return None
     
     async def get_batches(self) -> List[Dict]:
+        """Get user's batches"""
         await self.ensure_session()
         
         if not self.auth_token:
+            print("❌ No auth token available")
             return []
         
+        endpoint = self.endpoints.get('get_batches')
+        if not endpoint:
+            print(f"❌ No get_batches endpoint configured")
+            return []
+        
+        url = f"{self.base_url}{endpoint}"
         headers = self.headers.copy()
         headers['Authorization'] = f"Bearer {self.auth_token}"
         
         try:
-            async with self.session.get(
-                f"{self.BASE_URL}/v2/batches/my-batches",
-                headers=headers,
-                timeout=aiohttp.ClientTimeout(total=15)
-            ) as resp:
+            print(f"📚 Fetching batches from {url}")
+            
+            async with self.session.get(url, headers=headers) as resp:
+                print(f"📡 Response Status: {resp.status}")
+                
                 if resp.status == 200:
                     data = await resp.json()
-                    return data.get('data', [])
-        except:
-            pass
+                    print(f"📥 Batches Response: {json.dumps(data, indent=2)[:500]}")
+                    
+                    # Try to extract batches
+                    batches = None
+                    
+                    # Direct data key
+                    if self.data_key in data:
+                        batches = data[self.data_key]
+                    # Try common keys
+                    else:
+                        for key in ['courses', 'batches', 'data', 'subscriptions', 'purchases']:
+                            if key in data:
+                                batches = data[key]
+                                break
+                    
+                    # If still not found, assume data itself is the list
+                    if not batches and isinstance(data, list):
+                        batches = data
+                    
+                    if batches and isinstance(batches, list):
+                        print(f"✅ Found {len(batches)} batches")
+                        return batches
+                    else:
+                        print(f"⚠️ No batches in response")
+                else:
+                    text = await resp.text()
+                    print(f"❌ Fetch batches failed: {text[:200]}")
+        except Exception as e:
+            print(f"❌ Get Batches Exception: {e}")
         
         return []
     
     async def get_batch_content(self, batch_id: str) -> List[Dict]:
+        """Get batch content (videos/PDFs)"""
         await self.ensure_session()
         
         if not self.auth_token:
+            print("❌ No auth token")
             return []
         
+        endpoint = self.endpoints.get('get_batch_content')
+        if not endpoint:
+            print("❌ No content endpoint configured")
+            return []
+        
+        # Replace {batch_id} placeholder
+        endpoint = endpoint.replace('{batch_id}', str(batch_id))
+        
+        url = f"{self.base_url}{endpoint}"
         headers = self.headers.copy()
         headers['Authorization'] = f"Bearer {self.auth_token}"
         
         try:
-            async with self.session.get(
-                f"{self.BASE_URL}/v2/batches/{batch_id}/content",
-                headers=headers,
-                timeout=aiohttp.ClientTimeout(total=15)
-            ) as resp:
+            print(f"📝 Fetching content from {url}")
+            
+            async with self.session.get(url, headers=headers) as resp:
+                print(f"📡 Response Status: {resp.status}")
+                
                 if resp.status == 200:
                     data = await resp.json()
-                    return data.get('data', [])
-        except:
-            pass
+                    print(f"📥 Content Response: {json.dumps(data, indent=2)[:800]}")
+                    
+                    # Try to extract content
+                    content = None
+                    
+                    # Try data key
+                    if self.data_key in data:
+                        content = data[self.data_key]
+                    # Try common keys
+                    else:
+                        for key in ['content', 'lectures', 'lessons', 'videos', 'data', 'items']:
+                            if key in data:
+                                content = data[key]
+                                break
+                    
+                    # If list directly
+                    if not content and isinstance(data, list):
+                        content = data
+                    
+                    if content and isinstance(content, list):
+                        print(f"✅ Found {len(content)} items")
+                        return content
+                    else:
+                        print(f"⚠️ No content found")
+                else:
+                    text = await resp.text()
+                    print(f"❌ Fetch content failed: {text[:200]}")
+        except Exception as e:
+            print(f"❌ Get Content Exception: {e}")
         
         return []
 
 
-# API Factory
-def get_platform_api(app_id: str):
-    """Get API client for platform"""
-    apis = {
-        'rgvikramjeet': RGVikramjeetAPI,
-        'pw': PhysicsWallahAPI,
-    }
-    
-    api_class = apis.get(app_id, RGVikramjeetAPI)
-    return api_class()
+def get_platform_api(platform_id: str):
+    """Factory function to get API client"""
+    return UniversalPlatformAPI(platform_id)
