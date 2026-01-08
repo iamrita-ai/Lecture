@@ -1,8 +1,9 @@
 from pyrogram import Client, filters
-from pyrogram.types import Message
+from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from config import Config
 import time
 import psutil
+import asyncio
 
 def is_owner(user_id):
     return user_id in Config.OWNERS
@@ -10,12 +11,22 @@ def is_owner(user_id):
 @Client.on_message(filters.command("lock") & filters.user(Config.OWNERS))
 async def lock_command(client: Client, message: Message):
     await client.db.lock_bot()
-    await message.reply_text("🔒 **Bot Locked!** Only owners can use now.")
+    await message.reply_text(
+        "🔒 **Bot Locked!**\n\nOnly owners can use now.",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("👤 Owner", url="https://t.me/technicalserena")]
+        ])
+    )
 
 @Client.on_message(filters.command("unlock") & filters.user(Config.OWNERS))
 async def unlock_command(client: Client, message: Message):
     await client.db.unlock_bot()
-    await message.reply_text("🔓 **Bot Unlocked!** Everyone can use now.")
+    await message.reply_text(
+        "🔓 **Bot Unlocked!**\n\nEveryone can use now.",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("📢 Channel", url="https://t.me/serenaunzipbot")]
+        ])
+    )
 
 @Client.on_message(filters.command("premium") & filters.user(Config.OWNERS))
 async def premium_command(client: Client, message: Message):
@@ -37,7 +48,10 @@ async def premium_command(client: Client, message: Message):
                 "• Unlimited downloads\n"
                 "• Priority support\n"
                 "• Access to all features\n\n"
-                "Enjoy! 🚀"
+                "Enjoy! 🚀",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("👤 Owner", url="https://t.me/technicalserena")]
+                ])
             )
         except:
             pass
@@ -61,7 +75,10 @@ async def remove_premium_command(client: Client, message: Message):
                 user_id,
                 "⚠️ **Premium Access Removed**\n\n"
                 "Your premium access has been revoked.\n"
-                "Contact owner for more details."
+                "Contact owner for more details.",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("👤 Owner", url="https://t.me/technicalserena")]
+                ])
             )
         except:
             pass
@@ -91,7 +108,12 @@ async def stats_command(client: Client, message: Message):
     text += f"🟢 Active Today: {stats['active_today']}\n\n"
     text += f"📅 **Time:** {time.strftime('%Y-%m-%d %H:%M:%S')}"
     
-    await message.reply_text(text)
+    buttons = [
+        [InlineKeyboardButton("👤 Owner", url="https://t.me/technicalserena"),
+         InlineKeyboardButton("📢 Channel", url="https://t.me/serenaunzipbot")]
+    ]
+    
+    await message.reply_text(text, reply_markup=InlineKeyboardMarkup(buttons))
 
 @Client.on_message(filters.command("broadcast") & filters.user(Config.OWNERS))
 async def broadcast_command(client: Client, message: Message):
