@@ -1,5 +1,6 @@
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Message
+from pyrogram.errors import WebpageMediaEmpty, MediaEmpty
 from config import Config
 import time
 
@@ -102,31 +103,49 @@ async def start_command(client: Client, message: Message):
     try:
         member = await client.get_chat_member(Config.FORCE_SUB, user_id)
         if member.status in ["left", "kicked"]:
+            channel_chat = await client.get_chat(Config.FORCE_SUB)
+            invite_link = channel_chat.invite_link or f"https://t.me/c/{str(Config.FORCE_SUB)[4:]}"
+            
             await message.reply_text(
                 "⚠️ **You must join our channel first!**\n\n"
                 "Please join the channel and click /start again.",
                 reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("📢 Join Channel", url=f"https://t.me/{(await client.get_chat(Config.FORCE_SUB)).username or 'channel'}")]
+                    [InlineKeyboardButton("📢 Join Channel", url=invite_link)]
                 ])
             )
             return
     except Exception as e:
-        pass
+        print(f"Force sub check error: {e}")
     
-    # Send start message
+    # Create buttons
     buttons = [
         [InlineKeyboardButton("📚 Login to App", callback_data="login_menu")],
         [InlineKeyboardButton("❓ Help", callback_data="help"),
          InlineKeyboardButton("⚙️ Settings", callback_data="settings")],
-        [InlineKeyboardButton("👤 Owner", url=f"tg://user?id={Config.OWNERS[0]}"),
-         InlineKeyboardButton("📢 Channel", url=f"https://t.me/{(await client.get_chat(Config.FORCE_SUB)).username or 'channel'}")]
+        [InlineKeyboardButton("👤 Owner", url=f"tg://user?id={Config.OWNERS[0]}")]
     ]
     
-    await message.reply_photo(
-        photo=Config.START_PIC,
-        caption=START_TEXT.format(Config.BOT_NAME),
-        reply_markup=InlineKeyboardMarkup(buttons)
-    )
+    # Try to send with photo, fallback to text if photo fails
+    try:
+        if Config.START_PIC and Config.START_PIC.startswith('http'):
+            await message.reply_photo(
+                photo=Config.START_PIC,
+                caption=START_TEXT.format(Config.BOT_NAME),
+                reply_markup=InlineKeyboardMarkup(buttons)
+            )
+        else:
+            # No valid photo URL, send text only
+            await message.reply_text(
+                START_TEXT.format(Config.BOT_NAME),
+                reply_markup=InlineKeyboardMarkup(buttons)
+            )
+    except (WebpageMediaEmpty, MediaEmpty, Exception) as e:
+        # If photo fails, send text only
+        print(f"Photo send failed: {e}")
+        await message.reply_text(
+            START_TEXT.format(Config.BOT_NAME),
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
     
     # Log to channel
     try:
@@ -138,8 +157,8 @@ async def start_command(client: Client, message: Message):
             f"👥 Username: @{message.from_user.username or 'None'}\n"
             f"📅 Time: {time.strftime('%Y-%m-%d %H:%M:%S')}"
         )
-    except:
-        pass
+    except Exception as e:
+        print(f"Log channel error: {e}")
 
 @Client.on_message(filters.command("help"))
 async def help_command(client: Client, message: Message):
@@ -175,14 +194,33 @@ async def start_callback(client: Client, query):
         [InlineKeyboardButton("📚 Login to App", callback_data="login_menu")],
         [InlineKeyboardButton("❓ Help", callback_data="help"),
          InlineKeyboardButton("⚙️ Settings", callback_data="settings")],
-        [InlineKeyboardButton("👤 Owner", url=f"tg://user?id={Config.OWNERS[0]}"),
-         InlineKeyboardButton("📢 Channel", url=f"https://t.me/{(await client.get_chat(Config.FORCE_SUB)).username or 'channel'}")]
+        [InlineKeyboardButton("👤 Owner", url=f"tg://user?id={Config.OWNERS[0]}")]
     ]
     
-    await query.message.edit_caption(
-        caption=START_TEXT.format(Config.BOT_NAME),
-        reply_markup=InlineKeyboardMarkup(buttons)
-    )
+    # Try to edit with photo, fallback to text
+    try:
+        if hasattr(query.message, 'photo') and query.message.photo:
+            # Already has photo, just edit caption
+            await query.message.edit_caption(
+                caption=START_TEXT.format(Config.BOT_NAME),
+                reply_markup=InlineKeyboardMarkup(buttons)
+            )
+        else:
+            # No photo, edit text
+            await query.message.edit_text(
+                text=START_TEXT.format(Config.BOT_NAME),
+                reply_markup=InlineKeyboardMarkup(buttons)
+            )
+    except Exception as e:
+        # If edit fails, delete and send new
+        try:
+            await query.message.delete()
+            await query.message.chat.send_message(
+                text=START_TEXT.format(Config.BOT_NAME),
+                reply_markup=InlineKeyboardMarkup(buttons)
+            )
+        except:
+            pass
 
 @Client.on_message(filters.command("ping"))
 async def ping_command(client: Client, message: Message):
