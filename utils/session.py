@@ -1,6 +1,6 @@
 # User session management for login flow
 user_sessions = {}
-api_sessions = {}  # Store API clients for logged-in users
+api_sessions = {}  # Store API clients
 
 def set_user_state(user_id, state, data=None):
     """Set user's current state"""
@@ -24,23 +24,25 @@ def update_user_data(user_id, key, value):
         user_sessions[user_id] = {'state': None, 'data': {}}
     user_sessions[user_id]['data'][key] = value
 
-def set_api_session(user_id, app_id, api_client):
+def get_user_data(user_id, key, default=None):
+    """Get specific user data"""
+    if user_id in user_sessions:
+        return user_sessions[user_id]['data'].get(key, default)
+    return default
+
+def set_api_client(user_id, app_id, api_client):
     """Store API client for user"""
     if user_id not in api_sessions:
         api_sessions[user_id] = {}
     api_sessions[user_id][app_id] = api_client
 
-def get_api_session(user_id, app_id):
+def get_api_client(user_id, app_id):
     """Get stored API client"""
     if user_id in api_sessions:
         return api_sessions[user_id].get(app_id)
     return None
 
-def clear_api_session(user_id, app_id=None):
+def clear_api_client(user_id):
     """Clear API session"""
     if user_id in api_sessions:
-        if app_id:
-            if app_id in api_sessions[user_id]:
-                del api_sessions[user_id][app_id]
-        else:
-            del api_sessions[user_id]
+        del api_sessions[user_id]
