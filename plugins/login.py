@@ -18,9 +18,6 @@ COACHING_APPS = {
     "unacademy": {"name": "🎓 Unacademy", "icon": "🎓", "url": "https://unacademy.com"},
     "vedantu": {"name": "📖 Vedantu", "icon": "📖", "url": "https://www.vedantu.com"},
     "byjus": {"name": "🔬 BYJU'S", "icon": "🔬", "url": "https://byjus.com"},
-    "khan": {"name": "🌟 Khan Academy", "icon": "🌟", "url": "https://www.khanacademy.org"},
-    "toppr": {"name": "🎯 Toppr", "icon": "🎯", "url": "https://www.toppr.com"},
-    "doubtnut": {"name": "❓ Doubtnut", "icon": "❓", "url": "https://www.doubtnut.com"},
     "carrierwill": {"name": "🚀 Carrier Will", "icon": "🚀", "url": "https://carrierwill.in"},
     "studyiq": {"name": "🧠 Study IQ", "icon": "🧠", "url": "https://www.studyiq.com"},
     "exampur": {"name": "📘 Exampur", "icon": "📘", "url": "https://exampur.com"},
@@ -28,13 +25,8 @@ COACHING_APPS = {
     "rojgarwithankit": {"name": "💼 Rojgar with Ankit", "icon": "💼", "url": "https://rojgarwithankit.com"},
     "vidyakul": {"name": "🎬 Vidyakul", "icon": "🎬", "url": "https://vidyakul.com"},
     "aakash": {"name": "🏆 Aakash", "icon": "🏆", "url": "https://www.aakash.ac.in"},
-    "khanglobal": {"name": "🌍 Khan Global Studies", "icon": "🌍", "url": "https://khanglobalstudies.com"},
     "targetwithankit": {"name": "🎯 Target with Ankit", "icon": "🎯", "url": "https://targetwithankit.com"},
     "edurev": {"name": "📚 EduRev", "icon": "📚", "url": "https://edurev.in"},
-    "selectionway": {"name": "🛣️ Selection Way", "icon": "🛣️", "url": "https://selectionway.com"},
-    "parmaarssc": {"name": "📋 Parmaar SSC", "icon": "📋", "url": "https://parmaarssc.com"},
-    "sscmaker": {"name": "🔧 SSC Maker", "icon": "🔧", "url": "https://sscmaker.in"},
-    "smartkida": {"name": "🧩 SmartKida", "icon": "🧩", "url": "https://smartkida.com"},
 }
 
 @Client.on_message(filters.command("login"))
@@ -49,16 +41,16 @@ async def login_command(client: Client, message: Message):
     if not is_premium:
         await message.reply_text(
             "⚠️ **Premium Feature!**\n\n"
-            "Login and batch download require premium access.\n\n"
-            "**Free Users Can:**\n"
-            "• Send direct video/PDF links (10/day)\n\n"
-            "**Premium Users Get:**\n"
-            "• Platform login + batch extraction\n"
-            "• Unlimited downloads\n"
-            "• M3U8 support\n\n"
-            "Contact owner for premium!",
+            "Login and batch download require premium.\n\n"
+            "**Free Users:**\n"
+            "• Send direct M3U8/video links (10/day)\n\n"
+            "**Premium:**\n"
+            "• Platform login\n"
+            "• Batch extraction\n"
+            "• Unlimited downloads\n\n"
+            "Contact owner!",
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("👤 Contact Owner", url="https://t.me/technicalserena")]
+                [InlineKeyboardButton("👤 Owner", url="https://t.me/technicalserena")]
             ])
         )
         return
@@ -85,7 +77,7 @@ async def show_apps_menu(message):
     
     await message.reply_text(
         "📚 **Select Your Coaching Platform:**\n\n"
-        "Choose the platform you want to extract content from.",
+        "Choose the platform you want to login to.",
         reply_markup=InlineKeyboardMarkup(buttons)
     )
 
@@ -118,7 +110,7 @@ async def login_menu_callback(client: Client, query: CallbackQuery):
     
     await query.message.edit_text(
         "📚 **Select Your Coaching Platform:**\n\n"
-        "Choose the platform you want to extract content from.",
+        "Choose the platform you want to login to.",
         reply_markup=InlineKeyboardMarkup(buttons)
     )
 
@@ -134,7 +126,7 @@ async def app_selected_callback(client: Client, query: CallbackQuery):
     api_client = get_platform_api(app_id)
     set_api_client(user_id, app_id, api_client)
     
-    set_user_state(user_id, 'awaiting_credentials', {
+    set_user_state(user_id, 'awaiting_phone', {
         'app_id': app_id, 
         'app_name': app_name,
         'app_url': app_url
@@ -144,16 +136,14 @@ async def app_selected_callback(client: Client, query: CallbackQuery):
         f"📱 **{app_name}**\n"
         f"🌐 Website: `{app_url}`\n\n"
         f"━━━━━━━━━━━━━━━━━━\n\n"
-        f"**🔐 Login Options:**\n\n"
-        f"**Option 1: Phone + OTP (Recommended)**\n"
-        f"Send your phone number:\n"
-        f"Example: `9876543210`\n\n"
-        f"**Option 2: Phone + Password**\n"
-        f"Send in this format:\n"
-        f"`phone*password`\n"
-        f"Example: `9876543210*mypass123`\n\n"
-        f"━━━━━━━━━━━━━━━━━━\n\n"
-        f"⚠️ Use the credentials registered on **{app_name}**\n\n"
+        f"**Step 1: Phone Number**\n\n"
+        f"📞 Send your registered phone number:\n\n"
+        f"**Examples:**\n"
+        f"• `9876543210`\n"
+        f"• `+919876543210`\n"
+        f"• `919876543210`\n\n"
+        f"⚠️ This should be your **{app_name}** registered number\n\n"
+        f"💡 Country code is optional for India\n\n"
         f"Use /cancel to stop",
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("🌐 Open Website", url=app_url)],
@@ -165,19 +155,18 @@ async def app_selected_callback(client: Client, query: CallbackQuery):
 async def cancel_login_callback(client: Client, query: CallbackQuery):
     user_id = query.from_user.id
     clear_user_state(user_id)
-    clear_api_client(user_id)
     
     await query.message.edit_text(
         "❌ **Login Cancelled**\n\n"
-        "You can start again anytime with /login",
+        "You can start again with /login",
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("🏠 Home", callback_data="start")]
         ])
     )
 
-@Client.on_message(filters.text & filters.private & ~filters.command(['start', 'help', 'login', 'setting', 'settings', 'lock', 'unlock', 'premium', 'rem', 'stats', 'ping', 'broadcast', 'cancel']), group=1)
+@Client.on_message(filters.text & filters.private & ~filters.command(['start', 'help', 'login', 'setting', 'settings', 'lock', 'unlock', 'premium', 'rem', 'stats', 'ping', 'broadcast', 'cancel', 'done']), group=1)
 async def handle_user_input(client: Client, message: Message):
-    """Handle user text input based on current state"""
+    """Handle user text input based on state"""
     user_id = message.from_user.id
     
     if await client.db.is_bot_locked() and user_id not in Config.OWNERS:
@@ -187,192 +176,170 @@ async def handle_user_input(client: Client, message: Message):
     state = session.get('state')
     data = session.get('data', {})
     
-    if state == 'awaiting_credentials':
-        await handle_credentials(client, message, data)
-    elif state == 'awaiting_otp':
-        await handle_otp(client, message, data)
+    if state == 'awaiting_phone':
+        await handle_phone_number(client, message, data)
+    elif state == 'awaiting_password':
+        await handle_password(client, message, data)
     else:
         pass
 
-async def handle_credentials(client: Client, message: Message, data):
-    """Handle phone number or phone*password input"""
+async def handle_phone_number(client: Client, message: Message, data):
+    """Handle phone number input"""
     user_id = message.from_user.id
-    text = message.text.strip()
-    app_id = data.get('app_id')
-    app_name = data.get('app_name')
-    
-    # Check if it's phone*password format
-    if '*' in text:
-        parts = text.split('*', 1)
-        phone = parts[0].strip()
-        password = parts[1].strip()
-        
-        await login_with_password(client, message, user_id, app_id, app_name, phone, password)
-    else:
-        # Just phone number - will send OTP
-        phone = text.strip()
-        await send_otp_to_phone(client, message, user_id, app_id, app_name, phone, data)
-
-async def login_with_password(client, message, user_id, app_id, app_name, phone, password):
-    """Login using phone and password"""
-    status = await message.reply_text("🔐 **Logging in with password...**")
+    phone = message.text.strip()
+    app_name = data.get('app_name', 'Platform')
+    app_url = data.get('app_url', '')
     
     # Clean phone number
     phone = re.sub(r'\D', '', phone)
     
-    # Get API client
-    api_client = get_api_client(user_id, app_id)
-    if not api_client:
-        await status.edit_text("❌ **Error:** API client not found. Please try /login again.")
+    # Validate
+    if len(phone) < 10:
+        await message.reply_text(
+            "❌ **Invalid Phone Number!**\n\n"
+            "Please send a valid 10-digit phone number.\n\n"
+            "**Examples:**\n"
+            "• 9876543210\n"
+            "• +919876543210"
+        )
         return
     
-    try:
-        # Login with password
-        token = await api_client.login_with_password(phone, password)
-        
-        if token:
-            await status.edit_text("✅ **Login Successful!**\n\n⏳ Fetching your batches...")
-            await show_user_batches(client, message, user_id, app_id, app_name, api_client)
-        else:
-            await status.edit_text(
-                "❌ **Login Failed!**\n\n"
-                "Please check:\n"
-                "• Phone number is correct\n"
-                "• Password is correct\n"
-                "• Account exists on platform\n\n"
-                "Try again with /login"
-            )
-            clear_user_state(user_id)
-            
-    except Exception as e:
-        await status.edit_text(f"❌ **Error:** {str(e)}\n\nTry again with /login")
-        clear_user_state(user_id)
+    # Add country code if needed
+    if not phone.startswith('91') and len(phone) == 10:
+        phone = '91' + phone
+    
+    # Save phone and ask for password
+    update_user_data(user_id, 'phone', phone)
+    set_user_state(user_id, 'awaiting_password', data)
+    
+    await message.reply_text(
+        f"✅ **Phone Number Saved**\n\n"
+        f"📱 Number: `{phone}`\n"
+        f"📲 Platform: **{app_name}**\n\n"
+        f"━━━━━━━━━━━━━━━━━━\n\n"
+        f"**Step 2: Password**\n\n"
+        f"🔐 Now send your **{app_name}** password:\n\n"
+        f"**Example:** `mypassword123`\n\n"
+        f"⚠️ Make sure it's the correct password for this account\n\n"
+        f"🔒 Your password is secure and will not be stored\n\n"
+        f"Use /cancel to stop",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("🌐 Forgot Password?", url=app_url)],
+            [InlineKeyboardButton("❌ Cancel", callback_data="cancel_login")]
+        ])
+    )
 
-async def send_otp_to_phone(client, message, user_id, app_id, app_name, phone, data):
-    """Send OTP to user's phone via platform API"""
-    status = await message.reply_text("📱 **Sending OTP to your phone...**")
-    
-    # Clean phone number
-    phone = re.sub(r'\D', '', phone)
-    
-    # Get API client
-    api_client = get_api_client(user_id, app_id)
-    if not api_client:
-        await status.edit_text("❌ **Error:** API client not found. Please try /login again.")
-        return
-    
-    try:
-        # Send OTP via API
-        otp_sent = await api_client.send_otp(phone)
-        
-        if otp_sent:
-            update_user_data(user_id, 'phone', phone)
-            set_user_state(user_id, 'awaiting_otp', data)
-            
-            await status.edit_text(
-                f"✅ **OTP Sent Successfully!**\n\n"
-                f"📱 Phone: `+91{phone}`\n"
-                f"📲 Platform: **{app_name}**\n\n"
-                f"━━━━━━━━━━━━━━━━━━\n\n"
-                f"🔐 **Check your phone for OTP**\n\n"
-                f"OTP sent via SMS/App notification\n\n"
-                f"**Send the OTP here:**\n"
-                f"• 4-digit or 6-digit code\n"
-                f"• Example: `123456` or `1234`\n\n"
-                f"⏱️ OTP valid for 5-10 minutes\n\n"
-                f"Use /cancel to stop"
-            )
-        else:
-            await status.edit_text(
-                "❌ **Failed to send OTP!**\n\n"
-                "Possible reasons:\n"
-                "• Phone number not registered\n"
-                "• Platform API unavailable\n"
-                "• Network issue\n\n"
-                "**Try:**\n"
-                "• Check phone number\n"
-                "• Use phone*password format\n"
-                "• Try again with /login"
-            )
-            clear_user_state(user_id)
-            
-    except Exception as e:
-        await status.edit_text(f"❌ **Error:** {str(e)}\n\nTry again with /login")
-        clear_user_state(user_id)
-
-async def handle_otp(client: Client, message: Message, data):
-    """Verify OTP and login"""
+async def handle_password(client: Client, message: Message, data):
+    """Handle password and login"""
     user_id = message.from_user.id
-    otp = message.text.strip().replace(' ', '')
+    password = message.text.strip()
     app_id = data.get('app_id')
     app_name = data.get('app_name')
     phone = get_user_data(user_id, 'phone')
     
-    # Validate OTP (4 or 6 digits)
-    if not otp.isdigit() or len(otp) not in [4, 6]:
-        await message.reply_text(
-            "❌ **Invalid OTP!**\n\n"
-            "Please send 4 or 6 digit OTP.\n\n"
-            "**Example:** `123456`\n\n"
-            "Use /cancel to stop."
-        )
-        return
+    # Delete user's password message for security
+    try:
+        await message.delete()
+    except:
+        pass
     
-    status = await message.reply_text("🔐 **Verifying OTP...**")
+    status = await message.reply_text(
+        "🔐 **Logging in...**\n\n"
+        f"📱 Phone: `{phone}`\n"
+        f"📲 Platform: **{app_name}**\n\n"
+        f"⏳ Please wait..."
+    )
     
     # Get API client
     api_client = get_api_client(user_id, app_id)
     if not api_client:
-        await status.edit_text("❌ **Error:** API client not found. Please try /login again.")
+        await status.edit_text("❌ **Error:** Session expired. Use /login again.")
+        clear_user_state(user_id)
         return
     
     try:
-        # Verify OTP via API
-        token = await api_client.verify_otp(phone, otp)
+        # Login via API
+        token = await api_client.login_with_password(phone, password)
         
         if token:
             update_user_data(user_id, 'auth_token', token)
-            await status.edit_text("✅ **OTP Verified!**\n\n⏳ Fetching your batches...")
-            await show_user_batches(client, message, user_id, app_id, app_name, api_client)
+            await status.edit_text(
+                "✅ **Login Successful!**\n\n"
+                f"📱 Phone: `{phone}`\n"
+                f"📲 Platform: **{app_name}**\n\n"
+                f"⏳ Fetching your batches..."
+            )
+            await asyncio.sleep(1)
+            await fetch_and_show_batches(client, status, user_id, app_id, app_name, api_client)
         else:
             await status.edit_text(
-                "❌ **OTP Verification Failed!**\n\n"
-                "Possible reasons:\n"
-                "• Wrong OTP\n"
-                "• OTP expired\n"
-                "• Already used\n\n"
-                "Try /login again to get new OTP"
+                "❌ **Login Failed!**\n\n"
+                "**Possible Reasons:**\n"
+                "• Wrong phone number\n"
+                "• Wrong password\n"
+                "• Account doesn't exist\n"
+                "• Platform API is down\n\n"
+                "**What to do:**\n"
+                "1. Check your credentials on the website\n"
+                "2. Make sure you can login manually\n"
+                "3. Try /login again with correct details\n\n"
+                "**Need Help?**\n"
+                "Contact owner if issue persists",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🔄 Try Again", callback_data=f"app_{app_id}")],
+                    [InlineKeyboardButton("👤 Contact Owner", url="https://t.me/technicalserena")]
+                ])
             )
             clear_user_state(user_id)
             
     except Exception as e:
-        await status.edit_text(f"❌ **Error:** {str(e)}\n\nTry /login again")
+        await status.edit_text(
+            f"❌ **Login Error!**\n\n"
+            f"**Error:** `{str(e)}`\n\n"
+            f"**This might mean:**\n"
+            f"• Platform API changed\n"
+            f"• Network issue\n"
+            f"• Server problem\n\n"
+            f"Try /login again or contact owner",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔄 Try Again", callback_data=f"app_{app_id}")],
+                [InlineKeyboardButton("👤 Contact Owner", url="https://t.me/technicalserena")]
+            ])
+        )
         clear_user_state(user_id)
+        print(f"Login error for {app_name}: {e}")
 
-async def show_user_batches(client, message, user_id, app_id, app_name, api_client):
-    """Fetch and display user's purchased batches"""
+async def fetch_and_show_batches(client, message, user_id, app_id, app_name, api_client):
+    """Fetch and display user batches"""
     try:
-        # Get batches from API
+        # Fetch batches from API
         batches = await api_client.get_batches()
         
         if not batches:
-            await message.reply_text(
+            await message.edit_text(
                 "❌ **No Batches Found!**\n\n"
-                "You don't have any purchased courses on this platform.\n\n"
-                "Or the API returned empty data."
+                "**Possible Reasons:**\n"
+                "• No purchased courses\n"
+                "• API returned empty data\n"
+                "• Account has no active subscriptions\n\n"
+                "Check your account on the website",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🌐 Check Website", url=COACHING_APPS[app_id]['url'])],
+                    [InlineKeyboardButton("👤 Contact Owner", url="https://t.me/technicalserena")]
+                ])
             )
             clear_user_state(user_id)
             return
         
-        # Create buttons
+        # Create batch buttons
         buttons = []
-        for batch in batches[:20]:  # Limit to 20 batches
-            batch_id = batch.get('id') or batch.get('batch_id') or batch.get('course_id')
-            batch_name = batch.get('name') or batch.get('title') or f"Batch {batch_id}"
+        for batch in batches[:20]:  # Limit 20
+            batch_id = batch.get('id') or batch.get('batch_id') or batch.get('course_id') or batch.get('_id')
+            batch_name = batch.get('name') or batch.get('title') or batch.get('course_name') or f"Batch {batch_id}"
             
             # Truncate long names
-            if len(batch_name) > 40:
-                batch_name = batch_name[:37] + "..."
+            if len(batch_name) > 35:
+                batch_name = batch_name[:32] + "..."
             
             buttons.append([
                 InlineKeyboardButton(
@@ -383,65 +350,93 @@ async def show_user_batches(client, message, user_id, app_id, app_name, api_clie
         
         buttons.append([InlineKeyboardButton("❌ Cancel", callback_data="cancel_login")])
         
-        await message.reply_text(
+        await message.edit_text(
             f"✅ **Login Successful!**\n\n"
             f"📚 **{app_name}**\n"
-            f"📦 **Your Purchased Batches:** ({len(batches)})\n\n"
+            f"📦 **Your Batches:** ({len(batches)})\n\n"
             f"Select a batch to extract content:",
             reply_markup=InlineKeyboardMarkup(buttons)
         )
         
-        # Update state
+        # Save batches in session
         update_user_data(user_id, 'batches', batches)
         
     except Exception as e:
-        await message.reply_text(f"❌ **Error fetching batches:** {str(e)}")
+        await message.edit_text(
+            f"❌ **Error Fetching Batches!**\n\n"
+            f"**Error:** `{str(e)}`\n\n"
+            f"Try /login again",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔄 Try Again", callback_data=f"app_{app_id}")],
+                [InlineKeyboardButton("👤 Contact Owner", url="https://t.me/technicalserena")]
+            ])
+        )
         clear_user_state(user_id)
+        print(f"Fetch batches error: {e}")
 
 @Client.on_callback_query(filters.regex("^batch_"))
 async def batch_selected_callback(client: Client, query: CallbackQuery):
     """Handle batch selection"""
     user_id = query.from_user.id
     
-    # Parse callback data
+    # Parse data
     parts = query.data.split("_")
     app_id = parts[1]
-    batch_id = "_".join(parts[2:])  # In case batch_id has underscores
+    batch_id = "_".join(parts[2:])
     
     await query.message.edit_text(
-        f"📝 **Extracting batch content...**\n\n"
+        f"📝 **Extracting Batch Content...**\n\n"
+        f"📦 Batch ID: `{batch_id}`\n\n"
         f"⏳ This may take a few moments..."
     )
     
     # Get API client
     api_client = get_api_client(user_id, app_id)
     if not api_client:
-        await query.message.edit_text("❌ **Session expired!** Use /login again.")
+        await query.message.edit_text(
+            "❌ **Session Expired!**\n\n"
+            "Use /login again.",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔄 Login Again", callback_data="login_menu")]
+            ])
+        )
         return
     
     try:
-        # Get batch content from API
+        # Get batch content
         content = await api_client.get_batch_content(batch_id)
         
         if not content:
             await query.message.edit_text(
-                "❌ **No content found in this batch!**\n\n"
-                "The batch might be empty or API error occurred."
+                "❌ **No Content Found!**\n\n"
+                "This batch might be empty or locked.",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("◀️ Back to Batches", callback_data=f"app_{app_id}")],
+                    [InlineKeyboardButton("👤 Contact Owner", url="https://t.me/technicalserena")]
+                ])
             )
             return
         
         # Generate TXT file
-        await generate_batch_txt_file(client, query.message, user_id, app_id, batch_id, content)
+        await generate_batch_txt(client, query.message, user_id, app_id, batch_id, content)
         
     except Exception as e:
-        await query.message.edit_text(f"❌ **Error:** {str(e)}")
+        await query.message.edit_text(
+            f"❌ **Error Extracting Content!**\n\n"
+            f"**Error:** `{str(e)}`\n\n"
+            f"Try selecting another batch",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("◀️ Back", callback_data=f"app_{app_id}")],
+                [InlineKeyboardButton("👤 Contact Owner", url="https://t.me/technicalserena")]
+            ])
+        )
+        print(f"Batch content error: {e}")
 
-async def generate_batch_txt_file(client, message, user_id, app_id, batch_id, content):
-    """Generate TXT file with all batch content links"""
+async def generate_batch_txt(client, message, user_id, app_id, batch_id, content):
+    """Generate TXT file from batch content"""
     try:
         app_name = COACHING_APPS.get(app_id, {}).get('name', 'Platform')
         
-        # Parse content and extract links
         lines = []
         video_count = 0
         pdf_count = 0
@@ -452,10 +447,11 @@ async def generate_batch_txt_file(client, message, user_id, app_id, batch_id, co
                 item.get('title') or 
                 item.get('name') or 
                 item.get('lecture_name') or 
+                item.get('topic') or
                 f"Content {len(lines) + 1}"
             )
             
-            # Extract URL (video or PDF)
+            # Extract URL
             url = (
                 item.get('video_url') or 
                 item.get('url') or 
@@ -463,25 +459,35 @@ async def generate_batch_txt_file(client, message, user_id, app_id, batch_id, co
                 item.get('m3u8_url') or
                 item.get('hls_url') or
                 item.get('stream_url') or
-                item.get('pdf_url')
+                item.get('playback_url') or
+                item.get('pdf_url') or
+                item.get('resource_url')
             )
             
             if url:
                 # Clean title
                 title = title.replace('|', '-').strip()
                 
-                # Determine type
-                if any(ext in url.lower() for ext in ['.m3u8', '.mp4', '.mkv', 'video']):
+                # Count types
+                if any(ext in url.lower() for ext in ['.m3u8', '.mp4', '.mkv', 'video', 'stream']):
                     video_count += 1
-                elif '.pdf' in url.lower():
+                elif '.pdf' in url.lower() or 'pdf' in url.lower():
                     pdf_count += 1
                 
                 lines.append(f"{title} | {url}")
         
         if not lines:
             await message.edit_text(
-                "❌ **No downloadable links found!**\n\n"
-                "The batch content doesn't contain video/PDF URLs."
+                "❌ **No Downloadable Links!**\n\n"
+                "The batch doesn't contain extractable video/PDF URLs.\n\n"
+                "**This might mean:**\n"
+                "• Content is DRM protected\n"
+                "• Links are encrypted\n"
+                "• API structure changed\n\n"
+                "Contact owner for help",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("👤 Contact Owner", url="https://t.me/technicalserena")]
+                ])
             )
             return
         
@@ -490,10 +496,11 @@ async def generate_batch_txt_file(client, message, user_id, app_id, batch_id, co
         txt_content += f"# Batch ID: {batch_id}\n"
         txt_content += f"# Videos: {video_count} | PDFs: {pdf_count}\n"
         txt_content += f"# Total Items: {len(lines)}\n"
-        txt_content += f"# Generated by Serena Lec Bot\n\n"
+        txt_content += f"# Generated by Serena Lec Bot\n"
+        txt_content += f"# Timestamp: {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n"
         txt_content += "\n".join(lines)
         
-        # Save to file
+        # Save file
         os.makedirs("downloads", exist_ok=True)
         filename = f"downloads/batch_{user_id}_{int(asyncio.get_event_loop().time())}.txt"
         
@@ -505,7 +512,7 @@ async def generate_batch_txt_file(client, message, user_id, app_id, batch_id, co
             chat_id=message.chat.id,
             document=filename,
             caption=(
-                f"✅ **Batch TXT File Generated!**\n\n"
+                f"✅ **Batch TXT Generated!**\n\n"
                 f"📚 **Platform:** {app_name}\n"
                 f"📦 **Batch ID:** `{batch_id}`\n"
                 f"🎥 **Videos:** {video_count}\n"
@@ -513,10 +520,11 @@ async def generate_batch_txt_file(client, message, user_id, app_id, batch_id, co
                 f"📊 **Total:** {len(lines)}\n\n"
                 f"━━━━━━━━━━━━━━━━━━\n\n"
                 f"**📥 Next Steps:**\n"
-                f"1. This file contains all download links\n"
+                f"1. This file contains all links\n"
                 f"2. **Send this file back to me**\n"
-                f"3. I'll download all videos/PDFs!\n\n"
-                f"✨ **M3U8 videos will be converted to MP4**"
+                f"3. I'll download all videos/PDFs\n"
+                f"4. M3U8 videos → MP4 conversion\n\n"
+                f"✨ Ready to download!"
             )
         )
         
@@ -524,14 +532,37 @@ async def generate_batch_txt_file(client, message, user_id, app_id, batch_id, co
         
         # Clear session
         clear_user_state(user_id)
-        clear_api_client(user_id)
         
-        # Delete file
+        # Delete temp file
         try:
             os.remove(filename)
         except:
             pass
         
+        # Log
+        try:
+            await client.send_message(
+                Config.LOG_CHANNEL,
+                f"#BATCH_EXTRACTED\n\n"
+                f"👤 User: {message.from_user.mention if hasattr(message, 'from_user') else 'Unknown'}\n"
+                f"🆔 ID: `{user_id}`\n"
+                f"📚 Platform: {app_name}\n"
+                f"📦 Batch: `{batch_id}`\n"
+                f"🎥 Videos: {video_count}\n"
+                f"📄 PDFs: {pdf_count}\n"
+                f"📅 Time: {time.strftime('%Y-%m-%d %H:%M:%S')}"
+            )
+        except Exception as e:
+            print(f"Log error: {e}")
+        
     except Exception as e:
-        await message.edit_text(f"❌ **Error generating TXT:** {str(e)}")
-        print(f"TXT Generation Error: {e}")
+        await message.edit_text(
+            f"❌ **Error Generating TXT!**\n\n"
+            f"**Error:** `{str(e)}`",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("👤 Contact Owner", url="https://t.me/technicalserena")]
+            ])
+        )
+        print(f"TXT generation error: {e}")
+
+import time
