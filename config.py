@@ -20,8 +20,17 @@ class Config:
     
     # Bot Settings
     BOT_NAME = "Serena Lec"
-    FREE_LIMIT = 10  # Videos per day for free users
-    DOWNLOAD_DELAY = 5  # Seconds between downloads
+    FREE_LIMIT = 10  # Videos per day for free users (Optional - Change Kar Sakte Ho)
+    DOWNLOAD_DELAY = 5  # Seconds between downloads (Optional - Change Kar Sakte Ho)
+    PROGRESS_UPDATE_DELAY = 3  # Seconds between progress updates (Optional)
     
     # Flask
     PORT = int(environ.get("PORT", 8080))
+    
+    # Download Settings (Optional - Customize Kar Sakte Ho)
+    CHUNK_SIZE = 1024 * 1024  # 1MB chunks
+    MAX_CONCURRENT_DOWNLOADS = 3  # Maximum simultaneous downloads
+    
+    # Flood Control (Optional)
+    FLOOD_SLEEP = 5  # Default sleep time between files
+    ETA_UPDATE_INTERVAL = 4  # Update ETA every 4 seconds
