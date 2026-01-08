@@ -10,6 +10,31 @@ import random
 import aiohttp
 import aiofiles
 
+# Store active tasks
+active_tasks = {}
+
+@Client.on_message(filters.command("cancel") & filters.private)
+async def cancel_task(client: Client, message: Message):
+    """Cancel ongoing download task"""
+    user_id = message.from_user.id
+    
+    if user_id in active_tasks:
+        task_info = active_tasks[user_id]
+        task_info['cancelled'] = True
+        
+        await message.reply_text(
+            "🛑 **Task Cancellation Requested!**\n\n"
+            "⏳ Stopping current download...\n"
+            "🗑️ Cleaning up files...\n\n"
+            "Please wait a moment."
+        )
+    else:
+        await message.reply_text(
+            "❌ **No Active Task!**\n\n"
+            "You don't have any ongoing download task.\n\n"
+            "Use /login to start downloading."
+        )
+
 @Client.on_message(filters.document & filters.private)
 async def handle_txt_file(client: Client, message: Message):
     """Handle TXT file uploads"""
@@ -19,13 +44,22 @@ async def handle_txt_file(client: Client, message: Message):
     if await client.db.is_bot_locked() and user_id not in Config.OWNERS:
         return
     
+    # Check if user already has active task
+    if user_id in active_tasks and not active_tasks[user_id].get('cancelled'):
+        await message.reply_text(
+            "⚠️ **Task Already Running!**\n\n"
+            "You already have an active download task.\n\n"
+            "Use /cancel to stop it first."
+        )
+        return
+    
     # Check if it's a TXT file
     if not message.document.file_name.endswith('.txt'):
         return
     
     await process_txt_file(client, message)
 
-@Client.on_message(filters.text & filters.private & ~filters.command(['start', 'help', 'login', 'setting', 'settings', 'lock', 'unlock', 'premium', 'rem', 'stats', 'ping', 'broadcast']))
+@Client.on_message(filters.text & filters.private & ~filters.command(['start', 'help', 'login', 'setting', 'settings', 'lock', 'unlock', 'premium', 'rem', 'stats', 'ping', 'broadcast', 'cancel']))
 async def handle_invalid_text(client: Client, message: Message):
     """Handle invalid commands"""
     user_id = message.from_user.id
@@ -40,6 +74,7 @@ async def handle_invalid_text(client: Client, message: Message):
         "• `/help` - Get detailed help\n"
         "• `/login` - Login to coaching app\n"
         "• `/setting` - Configure settings\n"
+        "• `/cancel` - Cancel ongoing task\n"
         "• `/ping` - Check bot speed\n\n"
         "**📝 Example Usage:**\n"
         "1. Use `/login` to select app\n"
@@ -53,31 +88,38 @@ async def process_txt_file(client: Client, message: Message):
     user_id = message.from_user.id
     is_premium = await client.db.is_premium(user_id)
     
-    # Check if free user can download from txt
-    if not is_premium:
-        await message.reply_text(
-            "⚠️ **Premium Feature!**\n\n"
-            "Free users cannot download from TXT files.\n\n"
-            "**Free User Limits:**\n"
-            "• 10 direct downloads per day\n"
-            "• No batch downloads\n"
-            "• No TXT file processing\n\n"
-            "**💎 Premium Benefits:**\n"
-            "• Unlimited downloads\n"
-            "• Batch downloads via TXT\n"
-            "• Priority support\n"
-            "• Custom settings\n\n"
-            "Contact owner for premium access!",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("👤 Contact Owner", url=f"tg://user?id={Config.OWNERS[0]}")]
-            ])
-        )
-        return
-    
-    # Download and process TXT file
-    status = await message.reply_text("📥 **Processing TXT file...**")
+    # Initialize task tracking
+    active_tasks[user_id] = {
+        'cancelled': False,
+        'status': 'starting'
+    }
     
     try:
+        # Check if free user can download from txt
+        if not is_premium:
+            await message.reply_text(
+                "⚠️ **Premium Feature!**\n\n"
+                "Free users cannot download from TXT files.\n\n"
+                "**Free User Limits:**\n"
+                "• 10 direct downloads per day\n"
+                "• No batch downloads\n"
+                "• No TXT file processing\n\n"
+                "**💎 Premium Benefits:**\n"
+                "• Unlimited downloads\n"
+                "• Batch downloads via TXT\n"
+                "• Priority support\n"
+                "• Custom settings\n\n"
+                "Contact owner for premium access!",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("👤 Contact Owner", url=f"tg://user?id={Config.OWNERS[0]}")]
+                ])
+            )
+            del active_tasks[user_id]
+            return
+        
+        # Download and process TXT file
+        status = await message.reply_text("📥 **Processing TXT file...**")
+        
         # Download file
         file_path = await message.download()
         
@@ -91,6 +133,12 @@ async def process_txt_file(client: Client, message: Message):
             os.remove(file_path)
         except:
             pass
+        
+        # Check if cancelled
+        if active_tasks[user_id]['cancelled']:
+            await status.edit_text("🛑 **Task Cancelled!**")
+            del active_tasks[user_id]
+            return
         
         # Parse file (Format: Title | URL)
         videos = []
@@ -124,6 +172,7 @@ async def process_txt_file(client: Client, message: Message):
                 "`PDF Title | https://pdf-link.pdf`\n\n"
                 "Each link on a new line."
             )
+            del active_tasks[user_id]
             return
         
         # Show summary
@@ -132,7 +181,8 @@ async def process_txt_file(client: Client, message: Message):
             f"🎥 **Videos:** {len(videos)}\n"
             f"📄 **PDFs:** {len(pdfs)}\n"
             f"📦 **Total Files:** {total_files}\n\n"
-            f"⏳ **Starting download process...**"
+            f"⏳ **Starting download process...**\n\n"
+            f"💡 Use /cancel to stop this task"
         )
         
         await asyncio.sleep(2)
@@ -146,7 +196,6 @@ async def process_txt_file(client: Client, message: Message):
         # Determine where to send files
         if channel_id:
             try:
-                # Verify bot has access to channel
                 await client.get_chat(channel_id)
                 target_chat = channel_id
                 reply_to = None
@@ -168,9 +217,12 @@ async def process_txt_file(client: Client, message: Message):
         
         # Pin starting message
         try:
-            pinned = await status.pin()
+            await status.pin()
         except:
-            pinned = None
+            pass
+        
+        # Update task status
+        active_tasks[user_id]['status'] = 'downloading'
         
         # Download counters
         success = 0
@@ -179,6 +231,18 @@ async def process_txt_file(client: Client, message: Message):
         
         # Process videos
         for idx, video in enumerate(videos, 1):
+            # Check if cancelled
+            if active_tasks[user_id]['cancelled']:
+                await status.edit_text(
+                    f"🛑 **Task Cancelled by User!**\n\n"
+                    f"📊 **Progress Before Cancellation:**\n"
+                    f"✅ Success: {success}\n"
+                    f"❌ Failed: {failed}\n"
+                    f"⏸️ Stopped at: {idx}/{len(videos)} videos\n\n"
+                    f"🗑️ Cleaning up..."
+                )
+                break
+            
             try:
                 # Update status
                 await status.edit_text(
@@ -186,11 +250,27 @@ async def process_txt_file(client: Client, message: Message):
                     f"📊 Progress: `{idx}/{len(videos)}`\n"
                     f"📝 Current: `{video['title'][:50]}...`\n\n"
                     f"✅ Success: {success}\n"
-                    f"❌ Failed: {failed}"
+                    f"❌ Failed: {failed}\n\n"
+                    f"💡 Use /cancel to stop"
                 )
                 
-                # Simulate download (Replace with actual download logic)
-                file_path = await download_file(video['url'], video['title'], status, "Downloading")
+                # Download file
+                file_path = await download_file(
+                    video['url'], 
+                    video['title'], 
+                    status, 
+                    "Downloading",
+                    user_id
+                )
+                
+                # Check if cancelled during download
+                if active_tasks[user_id]['cancelled']:
+                    if file_path and os.path.exists(file_path):
+                        try:
+                            os.remove(file_path)
+                        except:
+                            pass
+                    break
                 
                 if file_path and os.path.exists(file_path):
                     # Generate caption
@@ -205,7 +285,10 @@ async def process_txt_file(client: Client, message: Message):
                             thumb = await generate_thumbnail()
                     
                     # Upload video
-                    upload_msg = await status.edit_text(f"📤 **Uploading**\n\n`{video['title']}`")
+                    upload_msg = await status.edit_text(
+                        f"📤 **Uploading**\n\n`{video['title']}`\n\n"
+                        f"💡 Use /cancel to stop"
+                    )
                     
                     sent_msg = await client.send_video(
                         chat_id=target_chat,
@@ -231,12 +314,10 @@ async def process_txt_file(client: Client, message: Message):
                             pass
                     
                     success += 1
-                    
-                    # Increment downloads
                     await client.db.increment_downloads(user_id)
                     
                     # Sleep to avoid flood
-                    if idx < len(videos):
+                    if idx < len(videos) and not active_tasks[user_id]['cancelled']:
                         await asyncio.sleep(Config.FLOOD_SLEEP)
                 else:
                     failed += 1
@@ -248,26 +329,63 @@ async def process_txt_file(client: Client, message: Message):
                 print(f"Error downloading {video['title']}: {e}")
                 await asyncio.sleep(2)
         
+        # Check if cancelled
+        if active_tasks[user_id]['cancelled']:
+            # Cleanup
+            cleanup_downloads()
+            await status.unpin()
+            del active_tasks[user_id]
+            return
+        
         # Process PDFs
         for idx, pdf in enumerate(pdfs, 1):
+            # Check if cancelled
+            if active_tasks[user_id]['cancelled']:
+                await status.edit_text(
+                    f"🛑 **Task Cancelled by User!**\n\n"
+                    f"📊 **Final Stats:**\n"
+                    f"✅ Success: {success}\n"
+                    f"❌ Failed: {failed}\n\n"
+                    f"🗑️ Cleaning up..."
+                )
+                break
+            
             try:
                 await status.edit_text(
                     f"📄 **Downloading PDFs**\n\n"
                     f"📊 Progress: `{idx}/{len(pdfs)}`\n"
                     f"📝 Current: `{pdf['title'][:50]}...`\n\n"
                     f"✅ Success: {success}\n"
-                    f"❌ Failed: {failed}"
+                    f"❌ Failed: {failed}\n\n"
+                    f"💡 Use /cancel to stop"
                 )
                 
                 # Download PDF
-                file_path = await download_file(pdf['url'], pdf['title'], status, "Downloading")
+                file_path = await download_file(
+                    pdf['url'], 
+                    pdf['title'], 
+                    status, 
+                    "Downloading",
+                    user_id
+                )
+                
+                if active_tasks[user_id]['cancelled']:
+                    if file_path and os.path.exists(file_path):
+                        try:
+                            os.remove(file_path)
+                        except:
+                            pass
+                    break
                 
                 if file_path and os.path.exists(file_path):
                     caption = f"📄 **{pdf['title']}**\n\n"
                     caption += f"📊 **PDF {idx} of {len(pdfs)}**\n"
                     caption += f"✨ **Extracted by:** {credit}"
                     
-                    upload_msg = await status.edit_text(f"📤 **Uploading PDF**\n\n`{pdf['title']}`")
+                    upload_msg = await status.edit_text(
+                        f"📤 **Uploading PDF**\n\n`{pdf['title']}`\n\n"
+                        f"💡 Use /cancel to stop"
+                    )
                     
                     await client.send_document(
                         chat_id=target_chat,
@@ -287,7 +405,7 @@ async def process_txt_file(client: Client, message: Message):
                     success += 1
                     await client.db.increment_downloads(user_id)
                     
-                    if idx < len(pdfs):
+                    if idx < len(pdfs) and not active_tasks[user_id]['cancelled']:
                         await asyncio.sleep(Config.FLOOD_SLEEP)
                 else:
                     failed += 1
@@ -298,6 +416,13 @@ async def process_txt_file(client: Client, message: Message):
                 failed_files.append(pdf['title'])
                 print(f"Error downloading {pdf['title']}: {e}")
                 await asyncio.sleep(2)
+        
+        # Check if task was cancelled
+        if active_tasks[user_id]['cancelled']:
+            cleanup_downloads()
+            await status.unpin()
+            del active_tasks[user_id]
+            return
         
         # Final report
         report = f"✅ **Download Complete!**\n\n"
@@ -338,23 +463,27 @@ async def process_txt_file(client: Client, message: Message):
             log_msg += f"📄 PDFs: {len(pdfs)}\n\n"
             log_msg += f"📅 **Time:** {time.strftime('%Y-%m-%d %H:%M:%S')}"
             
-            # Send to log channel in bot's topic
             await client.send_message(
                 Config.LOG_CHANNEL,
-                log_msg,
-                message_thread_id=None  # Will create/use "Serena Lec" topic
+                log_msg
             )
         except Exception as e:
             print(f"Failed to log: {e}")
         
+        # Cleanup
+        cleanup_downloads()
+        
     except Exception as e:
-        await status.edit_text(f"❌ **Error:** `{str(e)}`\n\nPlease try again or contact support.")
+        await message.reply_text(f"❌ **Error:** `{str(e)}`\n\nPlease try again or contact support.")
         print(f"TXT Processing Error: {e}")
+    
+    finally:
+        # Remove from active tasks
+        if user_id in active_tasks:
+            del active_tasks[user_id]
 
-async def download_file(url, filename, status_msg, action="Downloading"):
-    """
-    Download file from URL with progress
-    """
+async def download_file(url, filename, status_msg, action="Downloading", user_id=None):
+    """Download file from URL with progress and cancellation support"""
     try:
         clean_name = clean_filename(filename)
         
@@ -370,12 +499,9 @@ async def download_file(url, filename, status_msg, action="Downloading"):
         # Create downloads directory
         os.makedirs("downloads", exist_ok=True)
         
-        # This is a simulation - Replace with actual download logic
-        # For real implementation, use aiohttp to download from URL
-        
-        # Simulated download
+        # Download with aiohttp
         async with aiohttp.ClientSession() as session:
-            async with session.get(url) as resp:
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=3600)) as resp:
                 if resp.status == 200:
                     total_size = int(resp.headers.get('content-length', 0))
                     downloaded = 0
@@ -383,6 +509,10 @@ async def download_file(url, filename, status_msg, action="Downloading"):
                     
                     async with aiofiles.open(file_path, 'wb') as f:
                         async for chunk in resp.content.iter_chunked(Config.CHUNK_SIZE):
+                            # Check if cancelled
+                            if user_id and user_id in active_tasks and active_tasks[user_id]['cancelled']:
+                                return None
+                            
                             await f.write(chunk)
                             downloaded += len(chunk)
                             
@@ -403,3 +533,16 @@ async def download_file(url, filename, status_msg, action="Downloading"):
     except Exception as e:
         print(f"Download error for {filename}: {e}")
         return None
+
+def cleanup_downloads():
+    """Clean up downloads directory"""
+    try:
+        if os.path.exists("downloads"):
+            for file in os.listdir("downloads"):
+                file_path = os.path.join("downloads", file)
+                try:
+                    os.remove(file_path)
+                except:
+                    pass
+    except:
+        pass
