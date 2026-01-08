@@ -67,33 +67,35 @@ async def start_command(client: Client, message: Message):
             "🔒 **Bot is Currently Locked!**\n\n"
             "Contact owner to use this bot.",
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("👤 Owner", url=f"tg://user?id={Config.OWNERS[0]}")]
+                [InlineKeyboardButton("👤 Owner", url="https://t.me/technicalserena")]
             ])
         )
         return
     
+    # Check force subscription
     try:
         member = await client.get_chat_member(Config.FORCE_SUB, user_id)
         if member.status in ["left", "kicked"]:
-            channel_chat = await client.get_chat(Config.FORCE_SUB)
-            invite_link = channel_chat.invite_link or f"https://t.me/c/{str(Config.FORCE_SUB)[4:]}"
-            
             await message.reply_text(
-                "⚠️ **Join Channel First!**\n\n"
-                "Join and click /start again.",
+                "⚠️ **Join Our Channel First!**\n\n"
+                "Please join our channel to use this bot.\n"
+                "After joining, click /start again.",
                 reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("📢 Join", url=invite_link)]
+                    [InlineKeyboardButton("📢 Join Channel", url="https://t.me/serenaunzipbot")],
+                    [InlineKeyboardButton("🔄 Refresh", callback_data="check_subscription")]
                 ])
             )
             return
     except Exception as e:
         print(f"Force sub error: {e}")
     
+    # Create buttons with Force Sub and Owner
     buttons = [
-        [InlineKeyboardButton("📚 Login", callback_data="login_menu")],
+        [InlineKeyboardButton("📚 Login to App", callback_data="login_menu")],
         [InlineKeyboardButton("❓ Help", callback_data="help"),
          InlineKeyboardButton("⚙️ Settings", callback_data="settings")],
-        [InlineKeyboardButton("👤 Owner", url=f"tg://user?id={Config.OWNERS[0]}")]
+        [InlineKeyboardButton("👤 Owner", url="https://t.me/technicalserena"),
+         InlineKeyboardButton("📢 Channel", url="https://t.me/serenaunzipbot")]
     ]
     
     try:
@@ -126,12 +128,40 @@ async def start_command(client: Client, message: Message):
     except Exception as e:
         print(f"Log error: {e}")
 
+@Client.on_callback_query(filters.regex("^check_subscription$"))
+async def check_subscription_callback(client: Client, query):
+    """Check if user joined channel"""
+    user_id = query.from_user.id
+    
+    try:
+        member = await client.get_chat_member(Config.FORCE_SUB, user_id)
+        if member.status not in ["left", "kicked"]:
+            # User joined, show start message
+            buttons = [
+                [InlineKeyboardButton("📚 Login to App", callback_data="login_menu")],
+                [InlineKeyboardButton("❓ Help", callback_data="help"),
+                 InlineKeyboardButton("⚙️ Settings", callback_data="settings")],
+                [InlineKeyboardButton("👤 Owner", url="https://t.me/technicalserena"),
+                 InlineKeyboardButton("📢 Channel", url="https://t.me/serenaunzipbot")]
+            ]
+            
+            await query.message.edit_text(
+                START_TEXT.format(Config.BOT_NAME),
+                reply_markup=InlineKeyboardMarkup(buttons)
+            )
+            await query.answer("✅ Subscription verified!", show_alert=False)
+        else:
+            await query.answer("⚠️ Please join the channel first!", show_alert=True)
+    except Exception as e:
+        await query.answer("⚠️ Please join the channel first!", show_alert=True)
+
 @Client.on_message(filters.command("help"))
 async def help_command(client: Client, message: Message):
     buttons = [
         [InlineKeyboardButton("🏠 Home", callback_data="start"),
          InlineKeyboardButton("⚙️ Settings", callback_data="settings")],
-        [InlineKeyboardButton("👤 Owner", url=f"tg://user?id={Config.OWNERS[0]}")]
+        [InlineKeyboardButton("👤 Owner", url="https://t.me/technicalserena"),
+         InlineKeyboardButton("📢 Channel", url="https://t.me/serenaunzipbot")]
     ]
     
     await message.reply_text(
@@ -145,7 +175,8 @@ async def help_callback(client: Client, query):
     buttons = [
         [InlineKeyboardButton("🏠 Home", callback_data="start"),
          InlineKeyboardButton("⚙️ Settings", callback_data="settings")],
-        [InlineKeyboardButton("👤 Owner", url=f"tg://user?id={Config.OWNERS[0]}")]
+        [InlineKeyboardButton("👤 Owner", url="https://t.me/technicalserena"),
+         InlineKeyboardButton("📢 Channel", url="https://t.me/serenaunzipbot")]
     ]
     
     await query.message.edit_text(
@@ -157,10 +188,11 @@ async def help_callback(client: Client, query):
 @Client.on_callback_query(filters.regex("^start$"))
 async def start_callback(client: Client, query):
     buttons = [
-        [InlineKeyboardButton("📚 Login", callback_data="login_menu")],
+        [InlineKeyboardButton("📚 Login to App", callback_data="login_menu")],
         [InlineKeyboardButton("❓ Help", callback_data="help"),
          InlineKeyboardButton("⚙️ Settings", callback_data="settings")],
-        [InlineKeyboardButton("👤 Owner", url=f"tg://user?id={Config.OWNERS[0]}")]
+        [InlineKeyboardButton("👤 Owner", url="https://t.me/technicalserena"),
+         InlineKeyboardButton("📢 Channel", url="https://t.me/serenaunzipbot")]
     ]
     
     try:
