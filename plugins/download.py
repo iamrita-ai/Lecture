@@ -67,20 +67,38 @@ async def handle_invalid_text(client: Client, message: Message):
     if await client.db.is_bot_locked() and user_id not in Config.OWNERS:
         return
     
+    # First check if user is in a session (login flow)
+    from utils.session import get_user_state
+    session = get_user_state(user_id)
+    
+    if session.get('state'):
+        # User is in login flow, don't handle here
+        # Let login.py handle it
+        return
+    
+    # Check if it's a valid URL for single download
+    import re
+    url_pattern = re.compile(
+        r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+'
+    )
+    
+    if url_pattern.match(message.text):
+        # It's a URL, try to download
+        await handle_single_download(client, message)
+        return
+    
+    # Invalid command
     await message.reply_text(
-        "❌ **Invalid Command!**\n\n"
+        "❌ **Invalid Input!**\n\n"
         "**Available Commands:**\n"
         "• `/start` - Start the bot\n"
-        "• `/help` - Get detailed help\n"
-        "• `/login` - Login to coaching app\n"
-        "• `/setting` - Configure settings\n"
-        "• `/cancel` - Cancel ongoing task\n"
-        "• `/ping` - Check bot speed\n\n"
-        "**📝 Example Usage:**\n"
-        "1. Use `/login` to select app\n"
-        "2. Generate TXT file with batch links\n"
-        "3. Send TXT file to download content\n\n"
-        "Need help? Use `/help` command!"
+        "• `/help` - Get help\n"
+        "• `/login` - Login to platform\n"
+        "• `/setting` - Settings\n"
+        "• `/cancel` - Cancel task\n\n"
+        "**Or send:**\n"
+        "• Direct video/PDF link to download\n"
+        "• TXT file with batch links"
     )
 
 async def process_txt_file(client: Client, message: Message):
