@@ -21,7 +21,9 @@ async def settings_command(client: Client, message):
         [InlineKeyboardButton("✨ Add Credit", callback_data="set_credit")],
         [InlineKeyboardButton("🖼️ Thumbnail Mode", callback_data="set_thumbnail")],
         [InlineKeyboardButton("🔄 Reset Settings", callback_data="reset_settings")],
-        [InlineKeyboardButton("❌ Close", callback_data="close")]
+        [InlineKeyboardButton("🏠 Home", callback_data="start")],
+        [InlineKeyboardButton("👤 Owner", url="https://t.me/technicalserena"),
+         InlineKeyboardButton("📢 Channel", url="https://t.me/serenaunzipbot")]
     ]
     
     await message.reply_text(text, reply_markup=InlineKeyboardMarkup(buttons))
@@ -45,7 +47,9 @@ async def settings_callback(client: Client, query: CallbackQuery):
         [InlineKeyboardButton("✨ Add Credit", callback_data="set_credit")],
         [InlineKeyboardButton("🖼️ Thumbnail Mode", callback_data="set_thumbnail")],
         [InlineKeyboardButton("🔄 Reset Settings", callback_data="reset_settings")],
-        [InlineKeyboardButton("🏠 Home", callback_data="start")]
+        [InlineKeyboardButton("🏠 Home", callback_data="start")],
+        [InlineKeyboardButton("👤 Owner", url="https://t.me/technicalserena"),
+         InlineKeyboardButton("📢 Channel", url="https://t.me/serenaunzipbot")]
     ]
     
     await query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(buttons))
@@ -77,6 +81,22 @@ async def reset_callback(client: Client, query: CallbackQuery):
     await client.db.reset_settings(query.from_user.id)
     await query.answer("✅ Settings reset successfully!", show_alert=True)
     await settings_callback(client, query)
+
+@Client.on_callback_query(filters.regex("^set_channel$"))
+async def set_channel_info(client: Client, query: CallbackQuery):
+    await query.answer(
+        "Send channel ID in format: -100xxxxxxxxx\n"
+        "Feature coming soon!",
+        show_alert=True
+    )
+
+@Client.on_callback_query(filters.regex("^set_credit$"))
+async def set_credit_info(client: Client, query: CallbackQuery):
+    await query.answer(
+        "Send your credit name.\n"
+        "Feature coming soon!",
+        show_alert=True
+    )
 
 @Client.on_callback_query(filters.regex("^close$"))
 async def close_callback(client: Client, query: CallbackQuery):
