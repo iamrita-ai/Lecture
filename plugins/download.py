@@ -546,3 +546,142 @@ def cleanup_downloads():
                     pass
     except:
         pass
+
+async def download_single_file(client: Client, message: Message):
+    """Download single file from direct URL"""
+    user_id = message.from_user.id
+    is_premium = await client.db.is_premium(user_id)
+    
+    # Check free user limit
+    if not is_premium:
+        downloads_today = await client.db.get_downloads_today(user_id)
+        if downloads_today >= Config.FREE_LIMIT:
+            await message.reply_text(
+                f"⚠️ **Daily Limit Reached!**\n\n"
+                f"Free users: {Config.FREE_LIMIT} downloads/day\n"
+                f"You've used: {downloads_today}/{Config.FREE_LIMIT}\n\n"
+                f"Upgrade to premium for unlimited downloads!",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("👤 Get Premium", url=f"tg://user?id={Config.OWNERS[0]}")]
+                ])
+            )
+            return
+    
+    url = message.text.strip()
+    
+    # Extract filename from URL
+    try:
+        filename = url.split('/')[-1].split('?')[0]
+        if not filename:
+            filename = "download"
+        
+        # Add extension if not present
+        if '.' not in filename:
+            if any(ext in url.lower() for ext in ['.mp4', '.mkv', '.avi']):
+                filename += '.mp4'
+            elif '.pdf' in url.lower():
+                filename += '.pdf'
+            else:
+                filename += '.mp4'
+    except:
+        filename = "download.mp4"
+    
+    status = await message.reply_text(
+        f"📥 **Downloading...**\n\n"
+        f"📝 File: `{filename[:50]}...`\n\n"
+        f"⏳ Please wait..."
+    )
+    
+    try:
+        # Download file
+        file_path = await download_file(
+            url,
+            filename,
+            status,
+            "Downloading",
+            user_id
+        )
+        
+        if not file_path or not os.path.exists(file_path):
+            await status.edit_text(
+                "❌ **Download Failed!**\n\n"
+                "Please check if the URL is valid and accessible."
+            )
+            return
+        
+        # Get user settings
+        settings = await client.db.get_user_settings(user_id)
+        credit = settings.get('credit', 'Serena')
+        
+        # Prepare caption
+        caption = f"📁 **{filename}**\n\n"
+        caption += f"✨ **Downloaded by:** {credit}"
+        
+        # Send file
+        await status.edit_text(f"📤 **Uploading...**\n\n`{filename}`")
+        
+        if file_path.endswith('.pdf'):
+            await client.send_document(
+                chat_id=message.chat.id,
+                document=file_path,
+                caption=caption,
+                reply_to_message_id=message.id,
+                progress=progress_for_pyrogram,
+                progress_args=(status, time.time(), filename)
+            )
+        else:
+            # Generate thumbnail
+            thumb = await generate_thumbnail()
+            
+            await client.send_video(
+                chat_id=message.chat.id,
+                video=file_path,
+                caption=caption,
+                thumb=thumb,
+                reply_to_message_id=message.id,
+                progress=progress_for_pyrogram,
+                progress_args=(status, time.time(), filename)
+            )
+            
+            if thumb:
+                try:
+                    os.remove(thumb)
+                except:
+                    pass
+        
+        # Cleanup
+        try:
+            os.remove(file_path)
+        except:
+            pass
+        
+        await status.edit_text(
+            "✅ **Download Complete!**\n\n"
+            f"📁 File: `{filename}`\n"
+            f"✨ Sent successfully!"
+        )
+        
+        # Increment download count
+        await client.db.increment_downloads(user_id)
+        
+        # Log
+        try:
+            await client.send_message(
+                Config.LOG_CHANNEL,
+                f"#SINGLE_DOWNLOAD\n\n"
+                f"👤 {message.from_user.mention}\n"
+                f"🆔 `{user_id}`\n"
+                f"📁 {filename}\n"
+                f"🔗 {url[:50]}...\n"
+                f"📅 {time.strftime('%Y-%m-%d %H:%M:%S')}"
+            )
+        except:
+            pass
+        
+    except Exception as e:
+        await status.edit_text(
+            f"❌ **Error!**\n\n"
+            f"`{str(e)[:100]}`\n\n"
+            f"Please try again or contact support."
+        )
+        print(f"Single download error: {e}")
