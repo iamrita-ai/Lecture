@@ -16,6 +16,7 @@ I can help you download lectures, PDFs, and study materials from various online 
 • 📦 Batch downloads
 • 💾 Auto-delete after sending
 • 📊 Download progress tracking
+• 🛑 Cancel anytime with /cancel
 
 👇 **Click below to get started!**
 """
@@ -37,6 +38,7 @@ HELP_TEXT = """
 • Send the TXT file back to bot
 • Bot will download and send all files
 • Files auto-delete after sending
+• Use /cancel to stop anytime
 
 **📝 Example:**
 1. /login → Select "Physics Wallah"
@@ -45,8 +47,13 @@ HELP_TEXT = """
 4. Select batch → Get TXT file
 5. Send TXT file → Get all downloads
 
-**⚙️ Settings:** /setting
-**📊 Help:** /help
+**⚙️ Commands:**
+• /start - Start the bot
+• /help - Get this help message
+• /login - Login to coaching app
+• /setting - Configure settings
+• /cancel - Cancel ongoing task
+• /ping - Check bot speed
 
 **🆓 Free Users:** 10 videos/day
 **💎 Premium:** Unlimited downloads
@@ -57,12 +64,20 @@ HELP_TEXT = """
 • Vedantu
 • BYJU'S
 • Khan Academy India
+• Toppr
+• Doubtnut
+• Embibe
+• Gradeup
+• Testbook
+• Adda247
+• Oliveboard
 • And many more...
 
 **💡 Tips:**
 • Works in groups with topics
 • Random thumbnails on 1/3 videos
 • All actions logged in log channel
+• Use /cancel to stop downloads
 """
 
 @Client.on_message(filters.command("start") & filters.private)
