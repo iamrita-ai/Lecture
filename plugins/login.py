@@ -116,6 +116,41 @@ async def login_menu_callback(client: Client, query: CallbackQuery):
 
 @Client.on_callback_query(filters.regex("^app_"))
 async def app_selected_callback(client: Client, query: CallbackQuery):
+@Client.on_callback_query(filters.regex("^app_"))
+async def app_selected_callback(client: Client, query: CallbackQuery):
+    app_id = query.data.split("_")[1]
+    app_data = COACHING_APPS[app_id]
+    app_name = app_data["name"]
+    app_url = app_data["url"]
+    user_id = query.from_user.id
+    
+    # Show login options
+    buttons = [
+        [InlineKeyboardButton("🔐 Auto Login (Password)", callback_data=f"auto_{app_id}")],
+        [InlineKeyboardButton("📋 Manual Link Extraction", callback_data=f"manual_{app_id}")],
+        [InlineKeyboardButton("❌ Cancel", callback_data="start")]
+    ]
+    
+    await query.message.edit_text(
+        f"📱 **{app_name}**\n"
+        f"🌐 Website: `{app_url}`\n\n"
+        f"━━━━━━━━━━━━━━━━━━\n\n"
+        f"**Choose Login Method:**\n\n"
+        f"🔐 **Auto Login:**\n"
+        f"Bot will try to login automatically\n"
+        f"(May not work if API is not public)\n\n"
+        f"📋 **Manual Extraction:**\n"
+        f"You login on website yourself\n"
+        f"Extract M3U8 links manually\n"
+        f"Send links to bot\n"
+        f"(100% Working Method)\n\n"
+        f"Choose your preferred method:",
+        reply_markup=InlineKeyboardMarkup(buttons)
+    )
+
+@Client.on_callback_query(filters.regex("^auto_"))
+async def auto_login_callback(client: Client, query: CallbackQuery):
+    """Auto login flow"""
     app_id = query.data.split("_")[1]
     app_data = COACHING_APPS[app_id]
     app_name = app_data["name"]
@@ -133,37 +168,63 @@ async def app_selected_callback(client: Client, query: CallbackQuery):
     })
     
     await query.message.edit_text(
-        f"📱 **{app_name}**\n"
-        f"🌐 Website: `{app_url}`\n\n"
-        f"━━━━━━━━━━━━━━━━━━\n\n"
+        f"📱 **{app_name} - Auto Login**\n\n"
         f"**Step 1: Phone Number**\n\n"
         f"📞 Send your registered phone number:\n\n"
         f"**Examples:**\n"
         f"• `9876543210`\n"
-        f"• `+919876543210`\n"
-        f"• `919876543210`\n\n"
-        f"⚠️ This should be your **{app_name}** registered number\n\n"
-        f"💡 Country code is optional for India\n\n"
+        f"• `+919876543210`\n\n"
         f"Use /cancel to stop",
         reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("🌐 Open Website", url=app_url)],
             [InlineKeyboardButton("❌ Cancel", callback_data="cancel_login")]
         ])
     )
 
-@Client.on_callback_query(filters.regex("^cancel_login$"))
-async def cancel_login_callback(client: Client, query: CallbackQuery):
+@Client.on_callback_query(filters.regex("^manual_"))
+async def manual_extraction_callback(client: Client, query: CallbackQuery):
+    """Manual link extraction flow"""
+    app_id = query.data.split("_")[1]
+    app_data = COACHING_APPS[app_id]
+    app_name = app_data["name"]
+    app_url = app_data["url"]
     user_id = query.from_user.id
-    clear_user_state(user_id)
+    
+    set_user_state(user_id, 'awaiting_batch_links', {
+        'app_id': app_id, 
+        'app_name': app_name,
+        'app_url': app_url
+    })
+    
+    update_user_data(user_id, 'collected_links', [])
     
     await query.message.edit_text(
-        "❌ **Login Cancelled**\n\n"
-        "You can start again with /login",
+        f"📱 **{app_name} - Manual Extraction**\n\n"
+        f"🌐 Website: `{app_url}`\n\n"
+        f"━━━━━━━━━━━━━━━━━━\n\n"
+        f"**📖 Step-by-Step Guide:**\n\n"
+        f"**1.** Open {app_name} in Chrome\n"
+        f"**2.** Login with your credentials\n"
+        f"**3.** Go to your batch\n"
+        f"**4.** Open any video\n"
+        f"**5.** Press `F12` (Developer Tools)\n"
+        f"**6.** Go to **Network** tab\n"
+        f"**7.** Play the video\n"
+        f"**8.** Look for `.m3u8` links\n"
+        f"**9.** Right-click → Copy link\n"
+        f"**10.** Send here in format:\n\n"
+        f"```\n"
+        f"Lecture 1 | http://domain.com/video.m3u8\n"
+        f"Lecture 2 | http://domain.com/video2.m3u8\n"
+        f"```\n\n"
+        f"Send links one by one or multiple together.\n"
+        f"Type `/done` when finished!\n\n"
+        f"Use /cancel to stop",
         reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("🏠 Home", callback_data="start")]
+            [InlineKeyboardButton("🌐 Open Website", url=app_url)],
+            [InlineKeyboardButton("📺 Video Tutorial", url="https://www.youtube.com/watch?v=example")],
+            [InlineKeyboardButton("❌ Cancel", callback_data="cancel_login")]
         ])
     )
-
 @Client.on_message(filters.text & filters.private & ~filters.command(['start', 'help', 'login', 'setting', 'settings', 'lock', 'unlock', 'premium', 'rem', 'stats', 'ping', 'broadcast', 'cancel', 'done']), group=1)
 async def handle_user_input(client: Client, message: Message):
     """Handle user text input based on state"""
