@@ -3,7 +3,7 @@ import asyncio
 from typing import Dict, List, Optional
 import json
 import re
-from config.platforms_config import get_platform_config
+from platforms.config import get_platform_config
 
 class UniversalPlatformAPI:
     """Universal API client that works with any platform using config"""
