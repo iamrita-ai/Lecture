@@ -1,0 +1,20 @@
+serena-bot/
+├── bot.py
+├── main.py
+├── requirements.txt
+├── config.py
+├── database/
+│   └── database.py
+├── plugins/
+│   ├── __init__.py
+│   ├── start.py
+│   ├── login.py
+│   ├── download.py
+│   ├── admin.py
+│   └── settings.py
+├── utils/
+│   ├── __init__.py
+│   ├── helpers.py
+│   ├── extractors.py
+│   └── progress.py
+└── README.md
