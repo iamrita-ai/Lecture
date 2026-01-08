@@ -59,48 +59,6 @@ async def handle_txt_file(client: Client, message: Message):
     
     await process_txt_file(client, message)
 
-@Client.on_message(filters.text & filters.private & ~filters.command(['start', 'help', 'login', 'setting', 'settings', 'lock', 'unlock', 'premium', 'rem', 'stats', 'ping', 'broadcast', 'cancel']))
-async def handle_invalid_text(client: Client, message: Message):
-    """Handle invalid commands"""
-    user_id = message.from_user.id
-    
-    if await client.db.is_bot_locked() and user_id not in Config.OWNERS:
-        return
-    
-    # First check if user is in a session (login flow)
-    from utils.session import get_user_state
-    session = get_user_state(user_id)
-    
-    if session.get('state'):
-        # User is in login flow, don't handle here
-        # Let login.py handle it
-        return
-    
-    # Check if it's a valid URL for single download
-    import re
-    url_pattern = re.compile(
-        r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+'
-    )
-    
-    if url_pattern.match(message.text):
-        # It's a URL, try to download
-        await handle_single_download(client, message)
-        return
-    
-    # Invalid command
-    await message.reply_text(
-        "❌ **Invalid Input!**\n\n"
-        "**Available Commands:**\n"
-        "• `/start` - Start the bot\n"
-        "• `/help` - Get help\n"
-        "• `/login` - Login to platform\n"
-        "• `/setting` - Settings\n"
-        "• `/cancel` - Cancel task\n\n"
-        "**Or send:**\n"
-        "• Direct video/PDF link to download\n"
-        "• TXT file with batch links"
-    )
-
 async def process_txt_file(client: Client, message: Message):
     """Process uploaded TXT file and download content"""
     user_id = message.from_user.id
@@ -129,7 +87,7 @@ async def process_txt_file(client: Client, message: Message):
                 "• Custom settings\n\n"
                 "Contact owner for premium access!",
                 reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("👤 Contact Owner", url=f"tg://user?id={Config.OWNERS[0]}")]
+                    [InlineKeyboardButton("👤 Contact Owner", url="https://t.me/technicalserena")]
                 ])
             )
             del active_tasks[user_id]
@@ -565,6 +523,51 @@ def cleanup_downloads():
     except:
         pass
 
+
+# ============== SINGLE FILE DOWNLOAD HANDLER ==============
+
+@Client.on_message(filters.text & filters.private & ~filters.command(['start', 'help', 'login', 'setting', 'settings', 'lock', 'unlock', 'premium', 'rem', 'stats', 'ping', 'broadcast', 'cancel']), group=2)
+async def handle_text_input(client: Client, message: Message):
+    """Handle text input - check for URLs or invalid commands"""
+    user_id = message.from_user.id
+    
+    # Check if bot is locked
+    if await client.db.is_bot_locked() and user_id not in Config.OWNERS:
+        return
+    
+    # First check if user is in a session (login flow)
+    from utils.session import get_user_state
+    session = get_user_state(user_id)
+    
+    if session.get('state'):
+        # User is in login flow, already handled by login.py
+        return
+    
+    # Check if it's a valid URL for single download
+    import re
+    url_pattern = re.compile(
+        r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+'
+    )
+    
+    if url_pattern.match(message.text.strip()):
+        # It's a URL, try to download
+        await download_single_file(client, message)
+        return
+    
+    # Invalid command
+    await message.reply_text(
+        "❌ **Invalid Input!**\n\n"
+        "**Available Commands:**\n"
+        "• `/start` - Start the bot\n"
+        "• `/help` - Get help\n"
+        "• `/login` - Login to platform\n"
+        "• `/setting` - Settings\n"
+        "• `/cancel` - Cancel task\n\n"
+        "**Or send:**\n"
+        "• Direct video/PDF link to download\n"
+        "• TXT file with batch links"
+    )
+
 async def download_single_file(client: Client, message: Message):
     """Download single file from direct URL"""
     user_id = message.from_user.id
@@ -580,7 +583,7 @@ async def download_single_file(client: Client, message: Message):
                 f"You've used: {downloads_today}/{Config.FREE_LIMIT}\n\n"
                 f"Upgrade to premium for unlimited downloads!",
                 reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("👤 Get Premium", url=f"tg://user?id={Config.OWNERS[0]}")]
+                    [InlineKeyboardButton("👤 Get Premium", url="https://t.me/technicalserena")]
                 ])
             )
             return
