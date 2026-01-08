@@ -10,8 +10,8 @@ class Config:
     # Database
     MONGO_URI = environ.get("MONGO_URI", "")
     
-    # Media - Valid default Telegraph image
-    START_PIC = environ.get("START_PIC", "https://telegra.ph/file/f9e2b5d76b8b6f8f8f8f8.jpg")
+    # Media
+    START_PIC = environ.get("START_PIC", "https://telegra.ph/file/your-image.jpg")
     
     # Hardcoded Values
     LOG_CHANNEL = -1003508789207
