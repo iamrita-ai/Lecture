@@ -20,10 +20,11 @@ class Bot(Client):
             api_hash=Config.API_HASH,
             bot_token=Config.BOT_TOKEN,
             plugins=dict(root="plugins"),
-            sleep_threshold=30,
-            workers=50,  # Increased workers for faster uploads
+            sleep_threshold=60,
+            workers=20,
             no_updates=False,
-            max_concurrent_transmissions=10  # More concurrent uploads
+            max_concurrent_transmissions=5,
+            workdir="."
         )
         self.db = None
         
@@ -43,11 +44,10 @@ class Bot(Client):
                 f"🤖 **{Config.BOT_NAME} Started!**\n\n"
                 f"👤 Bot: @{self.username}\n"
                 f"🆔 ID: `{me.id}`\n"
-                f"📊 Status: Active\n"
-                f"⚡ Optimized for speed"
+                f"📊 Status: Online"
             )
         except Exception as e:
-            logger.error(f"Failed to send start message: {e}")
+            logger.error(f"Log error: {e}")
     
     async def stop(self, *args):
         await super().stop()
