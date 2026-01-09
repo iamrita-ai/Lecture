@@ -31,14 +31,14 @@ async def cancel_task(client: Client, message: Message):
 
 @Client.on_message(filters.document & filters.private)
 async def handle_txt_file(client: Client, message: Message):
-    """Handle TXT file uploads - Universal Support"""
+    """Handle TXT file uploads"""
     user_id = message.from_user.id
     
     if await client.db.is_bot_locked() and user_id not in Config.OWNERS:
         return
     
     if user_id in active_tasks and not active_tasks[user_id].get('cancelled'):
-        await message.reply_text("⚠️ **Task already running!**\n\nUse /cancel first")
+        await message.reply_text("⚠️ **Task running!** Use /cancel first")
         return
     
     if not message.document.file_name.endswith('.txt'):
@@ -47,7 +47,7 @@ async def handle_txt_file(client: Client, message: Message):
     await process_txt_file(client, message)
 
 async def process_txt_file(client: Client, message: Message):
-    """Process TXT file - Universal Format Support"""
+    """Process TXT file"""
     user_id = message.from_user.id
     is_premium = await client.db.is_premium(user_id)
     
@@ -57,8 +57,7 @@ async def process_txt_file(client: Client, message: Message):
         if not is_premium:
             await message.reply_text(
                 "⚠️ **Premium Required!**\n\n"
-                "TXT batch downloads need premium.\n\n"
-                "Free users can send direct links!",
+                "TXT downloads need premium.",
                 reply_markup=InlineKeyboardMarkup([
                     [InlineKeyboardButton("👤 Owner", url="https://t.me/technicalserena")]
                 ])
@@ -66,7 +65,7 @@ async def process_txt_file(client: Client, message: Message):
             del active_tasks[user_id]
             return
         
-        status = await message.reply_text("📥 **Processing TXT file...**")
+        status = await message.reply_text("📥 **Processing TXT...**")
         
         file_path = await message.download()
         
@@ -84,7 +83,6 @@ async def process_txt_file(client: Client, message: Message):
             del active_tasks[user_id]
             return
         
-        # Parse all lines - Universal format support
         files = []
         
         for line in lines:
@@ -107,14 +105,14 @@ async def process_txt_file(client: Client, message: Message):
                 files.append({'title': title, 'url': url})
         
         if not files:
-            await status.edit_text("❌ **No valid links found!**")
+            await status.edit_text("❌ **No valid links!**")
             del active_tasks[user_id]
             return
         
         await status.edit_text(
             f"📊 **Found {len(files)} files**\n\n"
             f"⏳ Starting downloads...\n\n"
-            f"💡 Use /cancel to stop"
+            f"💡 /cancel to stop"
         )
         
         await asyncio.sleep(2)
@@ -164,15 +162,14 @@ async def process_txt_file(client: Client, message: Message):
             
             try:
                 await status.edit_text(
-                    f"📥 **Downloading Files**\n\n"
-                    f"📊 Progress: `{idx}/{len(files)}`\n"
-                    f"📝 Current: `{file_data['title'][:50]}...`\n\n"
+                    f"📥 **Downloading**\n\n"
+                    f"📊 {idx}/{len(files)}\n"
+                    f"📝 `{file_data['title'][:50]}...`\n\n"
                     f"✅ Success: {success}\n"
                     f"❌ Failed: {failed}\n\n"
                     f"💡 /cancel to stop"
                 )
                 
-                # Universal download
                 file_path = await download_any_file(
                     file_data['url'],
                     file_data['title'],
@@ -193,15 +190,13 @@ async def process_txt_file(client: Client, message: Message):
                     caption += f"📊 File {idx} of {len(files)}\n"
                     caption += f"✨ Extracted by: {credit}"
                     
-                    # Detect file type
                     file_ext = file_path.split('.')[-1].lower()
                     
                     upload_msg = await status.edit_text(
                         f"📤 **Uploading**\n\n`{file_data['title']}`"
                     )
-                                        # Send based on type
+                    
                     if file_ext in ['mp4', 'mkv', 'avi', 'mov', 'flv', 'wmv', 'webm']:
-                        # Video
                         thumb = None
                         if thumbnail_mode == 'random' and random.randint(1, 3) == 1:
                             thumb = await generate_thumbnail()
@@ -215,7 +210,7 @@ async def process_txt_file(client: Client, message: Message):
                             reply_to_message_id=reply_to if not is_topic else None,
                             message_thread_id=topic_id if is_topic else None,
                             progress=progress_for_pyrogram,
-                            progress_args=(upload_msg, time.time(), file_data['title'])
+                            progress_args=("Uploading", upload_msg, time.time(), file_data['title'])
                         )
                         
                         if thumb:
@@ -225,7 +220,6 @@ async def process_txt_file(client: Client, message: Message):
                                 pass
                     
                     elif file_ext in ['mp3', 'wav', 'ogg', 'flac', 'm4a', 'aac']:
-                        # Audio
                         await client.send_audio(
                             chat_id=target_chat,
                             audio=file_path,
@@ -233,11 +227,10 @@ async def process_txt_file(client: Client, message: Message):
                             reply_to_message_id=reply_to if not is_topic else None,
                             message_thread_id=topic_id if is_topic else None,
                             progress=progress_for_pyrogram,
-                            progress_args=(upload_msg, time.time(), file_data['title'])
+                            progress_args=("Uploading", upload_msg, time.time(), file_data['title'])
                         )
                     
                     else:
-                        # Document (PDF, APK, ZIP, RAR, etc.)
                         await client.send_document(
                             chat_id=target_chat,
                             document=file_path,
@@ -245,7 +238,7 @@ async def process_txt_file(client: Client, message: Message):
                             reply_to_message_id=reply_to if not is_topic else None,
                             message_thread_id=topic_id if is_topic else None,
                             progress=progress_for_pyrogram,
-                            progress_args=(upload_msg, time.time(), file_data['title'])
+                            progress_args=("Uploading", upload_msg, time.time(), file_data['title'])
                         )
                     
                     try:
@@ -265,7 +258,7 @@ async def process_txt_file(client: Client, message: Message):
             except Exception as e:
                 failed += 1
                 failed_files.append(file_data['title'])
-                print(f"Error: {file_data['title']}: {e}")
+                print(f"Error: {e}")
                 await asyncio.sleep(2)
         
         if active_tasks[user_id]['cancelled']:
@@ -275,7 +268,6 @@ async def process_txt_file(client: Client, message: Message):
             return
         
         report = f"✅ **Complete!**\n\n"
-        report += f"📊 **Statistics:**\n"
         report += f"✅ Success: `{success}`\n"
         report += f"❌ Failed: `{failed}`\n"
         report += f"📦 Total: `{len(files)}`\n\n"
@@ -284,8 +276,6 @@ async def process_txt_file(client: Client, message: Message):
             report += f"**⚠️ Failed:**\n"
             for fail in failed_files[:5]:
                 report += f"• `{fail[:40]}...`\n"
-            if len(failed_files) > 5:
-                report += f"• *+{len(failed_files)-5} more*\n"
         
         await status.edit_text(report)
         
@@ -297,12 +287,9 @@ async def process_txt_file(client: Client, message: Message):
         try:
             await client.send_message(
                 Config.LOG_CHANNEL,
-                f"#BATCH_DOWNLOAD\n\n"
+                f"#BATCH\n\n"
                 f"👤 {message.from_user.mention}\n"
-                f"🆔 `{user_id}`\n"
-                f"✅ Success: {success}\n"
-                f"❌ Failed: {failed}\n"
-                f"📅 {time.strftime('%Y-%m-%d %H:%M:%S')}"
+                f"✅ {success} | ❌ {failed}"
             )
         except:
             pass
@@ -310,15 +297,13 @@ async def process_txt_file(client: Client, message: Message):
         cleanup_downloads()
         
     except Exception as e:
-        await message.reply_text(f"❌ **Error:** `{str(e)}`")
-        print(f"TXT Error: {e}")
+        await message.reply_text(f"❌ Error: `{str(e)}`")
     
     finally:
         if user_id in active_tasks:
             del active_tasks[user_id]
 
 def cleanup_downloads():
-    """Clean downloads folder"""
     try:
         if os.path.exists("downloads"):
             for file in os.listdir("downloads"):
@@ -330,150 +315,3 @@ def cleanup_downloads():
                     pass
     except:
         pass
-
-# ============== DIRECT LINK DOWNLOAD ==============
-
-@Client.on_message(filters.text & filters.private & ~filters.command(['start', 'help', 'login', 'setting', 'settings', 'lock', 'unlock', 'premium', 'rem', 'stats', 'ping', 'broadcast', 'cancel', 'done']), group=2)
-async def handle_direct_link(client: Client, message: Message):
-    """Handle direct file URLs - Universal Support"""
-    user_id = message.from_user.id
-    
-    if await client.db.is_bot_locked() and user_id not in Config.OWNERS:
-        return
-    
-    from utils.session import get_user_state
-    session = get_user_state(user_id)
-    
-    if session.get('state'):
-        return
-    
-    url_pattern = re.compile(r'http[s]?://[^\s]+')
-    
-    if url_pattern.match(message.text.strip()):
-        await download_single_file(client, message)
-        return
-    
-    await message.reply_text(
-        "❌ **Invalid input!**\n\n"
-        "**Send:**\n"
-        "• Direct file URL\n"
-        "• TXT file with links\n\n"
-        "**Commands:** /help"
-    )
-
-async def download_single_file(client: Client, message: Message):
-    """Download single file - Any Format"""
-    user_id = message.from_user.id
-    is_premium = await client.db.is_premium(user_id)
-    
-    if not is_premium:
-        downloads_today = await client.db.get_downloads_today(user_id)
-        if downloads_today >= Config.FREE_LIMIT:
-            await message.reply_text(
-                f"⚠️ **Daily limit: {Config.FREE_LIMIT}/day**\n"
-                f"Used: {downloads_today}/{Config.FREE_LIMIT}\n\n"
-                f"Get premium for unlimited!",
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("👤 Premium", url="https://t.me/technicalserena")]
-                ])
-            )
-            return
-    
-    url = message.text.strip()
-    
-    # Extract filename
-    try:
-        filename = url.split('/')[-1].split('?')[0]
-        if not filename or '.' not in filename:
-            filename = "download"
-    except:
-        filename = "download"
-    
-    status = await message.reply_text(
-        f"📥 **Downloading...**\n\n"
-        f"📝 `{filename[:50]}...`\n\n"
-        f"⏳ Please wait..."
-    )
-    
-    try:
-        file_path = await download_any_file(url, filename, status, user_id)
-        
-        if not file_path or not os.path.exists(file_path):
-            await status.edit_text("❌ **Download failed!**\n\nCheck if URL is valid")
-            return
-        
-        settings = await client.db.get_user_settings(user_id)
-        credit = settings.get('credit', 'Serena')
-        
-        caption = f"📁 **{filename}**\n\n✨ Downloaded by: {credit}"
-        
-        await status.edit_text(f"📤 **Uploading...**\n\n`{filename}`")
-        
-        # Detect file type
-        file_ext = file_path.split('.')[-1].lower()
-        
-        if file_ext in ['mp4', 'mkv', 'avi', 'mov', 'flv', 'wmv', 'webm']:
-            thumb = await generate_thumbnail()
-            
-            await client.send_video(
-                chat_id=message.chat.id,
-                video=file_path,
-                caption=caption,
-                thumb=thumb,
-                supports_streaming=True,
-                reply_to_message_id=message.id,
-                progress=progress_for_pyrogram,
-                progress_args=(status, time.time(), filename)
-            )
-            
-            if thumb:
-                try:
-                    os.remove(thumb)
-                except:
-                    pass
-        
-        elif file_ext in ['mp3', 'wav', 'ogg', 'flac', 'm4a', 'aac']:
-            await client.send_audio(
-                chat_id=message.chat.id,
-                audio=file_path,
-                caption=caption,
-                reply_to_message_id=message.id,
-                progress=progress_for_pyrogram,
-                progress_args=(status, time.time(), filename)
-            )
-        
-        else:
-            await client.send_document(
-                chat_id=message.chat.id,
-                document=file_path,
-                caption=caption,
-                reply_to_message_id=message.id,
-                progress=progress_for_pyrogram,
-                progress_args=(status, time.time(), filename)
-            )
-        
-        try:
-            os.remove(file_path)
-        except:
-            pass
-        
-        await status.edit_text(f"✅ **Done!**\n\n📁 `{filename}`")
-        
-        await client.db.increment_downloads(user_id)
-        
-        try:
-            await client.send_message(
-                Config.LOG_CHANNEL,
-                f"#DIRECT_DOWNLOAD\n\n"
-                f"👤 {message.from_user.mention}\n"
-                f"🆔 `{user_id}`\n"
-                f"📁 {filename}\n"
-                f"🔗 {url[:50]}...\n"
-                f"📅 {time.strftime('%Y-%m-%d %H:%M:%S')}"
-            )
-        except:
-            pass
-        
-    except Exception as e:
-        await status.edit_text(f"❌ **Error!**\n\n`{str(e)[:100]}`")
-        print(f"Download error: {e}")
