@@ -330,3 +330,149 @@ def cleanup_downloads():
                     pass
     except:
         pass
+
+# ============== DIRECT LINK DOWNLOAD ==============
+
+@Client.on_message(filters.text & filters.private & ~filters.command(['start', 'help', 'login', 'setting', 'settings', 'lock', 'unlock', 'premium', 'rem', 'stats', 'ping', 'broadcast', 'cancel', 'done']), group=2)
+async def handle_direct_link(client: Client, message: Message):
+    """Handle direct file URLs - Universal Support"""
+    user_id = message.from_user.id
+    
+    if await client.db.is_bot_locked() and user_id not in Config.OWNERS:
+        return
+    
+    from utils.session import get_user_state
+    session = get_user_state(user_id)
+    
+    if session.get('state'):
+        return
+    
+    url_pattern = re.compile(r'http[s]?://[^\s]+')
+    
+    if url_pattern.match(message.text.strip()):
+        await download_single_file(client, message)
+        return
+    
+    await message.reply_text(
+        "❌ **Invalid input!**\n\n"
+        "**Send:**\n"
+        "• Direct file URL\n"
+        "• TXT file with links\n\n"
+        "**Commands:** /help"
+    )
+
+async def download_single_file(client: Client, message: Message):
+    """Download single file - Any Format"""
+    user_id = message.from_user.id
+    is_premium = await client.db.is_premium(user_id)
+    
+    if not is_premium:
+        downloads_today = await client.db.get_downloads_today(user_id)
+        if downloads_today >= Config.FREE_LIMIT:
+            await message.reply_text(
+                f"⚠️ **Daily limit: {Config.FREE_LIMIT}/day**\n"
+                f"Used: {downloads_today}/{Config.FREE_LIMIT}\n\n"
+                f"Get premium for unlimited!",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("👤 Premium", url="https://t.me/technicalserena")]
+                ])
+            )
+            return
+    
+    url = message.text.strip()
+    
+    # Extract filename
+    try:
+        filename = url.split('/')[-1].split('?')[0]
+        if not filename or '.' not in filename:
+            filename = "download"
+    except:
+        filename = "download"
+    
+    status = await message.reply_text(
+        f"📥 **Downloading...**\n\n"
+        f"📝 `{filename[:50]}...`\n\n"
+        f"⏳ Please wait..."
+    )
+    
+    try:
+        file_path = await download_any_file(url, filename, status, user_id)
+        
+        if not file_path or not os.path.exists(file_path):
+            await status.edit_text("❌ **Download failed!**\n\nCheck if URL is valid")
+            return
+        
+        settings = await client.db.get_user_settings(user_id)
+        credit = settings.get('credit', 'Serena')
+        
+        caption = f"📁 **{filename}**\n\n✨ Downloaded by: {credit}"
+        
+        await status.edit_text(f"📤 **Uploading...**\n\n`{filename}`")
+        
+        # Detect file type
+        file_ext = file_path.split('.')[-1].lower()
+        
+        if file_ext in ['mp4', 'mkv', 'avi', 'mov', 'flv', 'wmv', 'webm']:
+            thumb = await generate_thumbnail()
+            
+            await client.send_video(
+                chat_id=message.chat.id,
+                video=file_path,
+                caption=caption,
+                thumb=thumb,
+                reply_to_message_id=message.id,
+                progress=progress_for_pyrogram,
+                progress_args=(status, time.time(), filename)
+            )
+            
+            if thumb:
+                try:
+                    os.remove(thumb)
+                except:
+                    pass
+        
+        elif file_ext in ['mp3', 'wav', 'ogg', 'flac', 'm4a', 'aac']:
+            await client.send_audio(
+                chat_id=message.chat.id,
+                audio=file_path,
+                caption=caption,
+                reply_to_message_id=message.id,
+                progress=progress_for_pyrogram,
+                progress_args=(status, time.time(), filename)
+            )
+        
+        else:
+            await client.send_document(
+                chat_id=message.chat.id,
+                document=file_path,
+                caption=caption,
+                reply_to_message_id=message.id,
+                progress=progress_for_pyrogram,
+                progress_args=(status, time.time(), filename)
+            )
+        
+        try:
+            os.remove(file_path)
+        except:
+            pass
+        
+        await status.edit_text(f"✅ **Done!**\n\n📁 `{filename}`")
+        
+        await client.db.increment_downloads(user_id)
+        
+        try:
+            await client.send_message(
+                Config.LOG_CHANNEL,
+                f"#DIRECT_DOWNLOAD\n\n"
+                f"👤 {message.from_user.mention}\n"
+                f"🆔 `{user_id}`\n"
+                f"📁 {filename}\n"
+                f"🔗 {url[:50]}...\n"
+                f"📅 {time.strftime('%Y-%m-%d %H:%M:%S')}"
+            )
+        except:
+            pass
+        
+    except Exception as e:
+        await status.edit_text(f"❌ **Error!**\n\n`{str(e)[:100]}`")
+        print(f"Download error: {e}")
