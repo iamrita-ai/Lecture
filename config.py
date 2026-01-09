@@ -27,9 +27,14 @@ class Config:
     # Flask
     PORT = int(environ.get("PORT", 8080))
     
-    # Download Settings
-    CHUNK_SIZE = 1024 * 1024
-    MAX_CONCURRENT_DOWNLOADS = 3
+    # Download Settings - OPTIMIZED
+    CHUNK_SIZE = 5 * 1024 * 1024  # 5MB chunks (faster)
+    MAX_CONCURRENT_DOWNLOADS = 5
+    DOWNLOAD_TIMEOUT = 7200  # 2 hours timeout
+    
+    # Upload Settings - OPTIMIZED  
+    UPLOAD_CHUNK_SIZE = 512 * 1024  # 512KB for Telegram
+    UPLOAD_TIMEOUT = 3600  # 1 hour
     
     # Flood Control
     FLOOD_SLEEP = 5
