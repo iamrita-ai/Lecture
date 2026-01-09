@@ -201,17 +201,19 @@ async def process_txt_file(client: Client, message: Message):
                     )
                     
                     # Send based on type
-                    if file_ext in ['mp4', 'mkv', 'avi', 'mov', 'flv', 'wmv', 'webm']:
+                                        if file_ext in ['mp4', 'mkv', 'avi', 'mov', 'flv', 'wmv', 'webm']:
                         # Video
                         thumb = None
                         if thumbnail_mode == 'random' and random.randint(1, 3) == 1:
                             thumb = await generate_thumbnail()
                         
-                        await client.send_video(
+                        # Optimized upload
+                        sent = await client.send_video(
                             chat_id=target_chat,
                             video=file_path,
                             caption=caption,
                             thumb=thumb,
+                            supports_streaming=True,
                             reply_to_message_id=reply_to if not is_topic else None,
                             message_thread_id=topic_id if is_topic else None,
                             progress=progress_for_pyrogram,
