@@ -1,55 +1,55 @@
 import time
 import math
-import asyncio
-from config import Config
 
 async def progress_for_pyrogram(current, total, ud_type, message, start, filename=""):
     """
-    Stylish progress bar with minimal space
+    Enhanced progress with ETA - Updates every 2-3 seconds
     """
     now = time.time()
     diff = now - start
     
-    # Update progress every X seconds or at completion
-    if round(diff % Config.ETA_UPDATE_INTERVAL) == 0 or current == total:
+    # Update every 2 seconds or at completion
+    if round(diff % 2) == 0 or current == total:
         try:
+            if total == 0:
+                return
+            
             percentage = current * 100 / total
             speed = current / diff if diff > 0 else 0
             eta_seconds = round((total - current) / speed) if speed > 0 else 0
             
             # Progress bar
-            filled_length = math.floor(percentage / 5)
-            empty_length = 20 - filled_length
-            progress_bar = "●" * filled_length + "○" * empty_length
+            filled = math.floor(percentage / 5)
+            empty = 20 - filled
+            bar = "●" * filled + "○" * empty
             
             # Format time
-            eta_formatted = format_time(eta_seconds)
+            eta = format_time(eta_seconds)
+            elapsed = format_time(int(diff))
             
-            # Format bytes
-            current_mb = humanbytes(current)
-            total_mb = humanbytes(total)
-            speed_formatted = humanbytes(speed)
+            # Format sizes
+            current_size = humanbytes(current)
+            total_size = humanbytes(total)
+            speed_fmt = humanbytes(speed)
             
-            # Create progress message
-            progress_text = f"""
-**{ud_type}**
-
-`{filename}`
-**to my server**
-
-[{progress_bar}]
-◌ **Progress😉:** 〘 {percentage:.2f}% 〙
-**Done:** 〘{current_mb} of {total_mb}〙
-◌ **Speed🚀:** 〘 {speed_formatted}/s 〙
-◌ **Time Left⏳:** 〘 {eta_formatted} 〙
-"""
+            # Create message
+            text = f"**{ud_type}**\n\n"
+            text += f"`{filename[:40]}...`\n"
+            text += f"**to server**\n\n"
+            text += f"[{bar}]\n"
+            text += f"◌ **Progress😉:** 〘 {percentage:.2f}% 〙\n"
+            text += f"**Done:** 〘{current_size} of {total_size}〙\n"
+            text += f"◌ **Speed🚀:** 〘 {speed_fmt}/s 〙\n"
+            text += f"◌ **Time Left⏳:** 〘 {eta} 〙\n"
+            text += f"⏱️ **Elapsed:** 〘 {elapsed} 〙"
             
-            await message.edit_text(text=progress_text)
+            await message.edit_text(text)
+            
         except Exception as e:
             pass
 
 def humanbytes(size):
-    """Convert bytes to human readable format"""
+    """Convert bytes to human readable"""
     if not size or size == 0:
         return "0 B"
     
@@ -65,7 +65,7 @@ def humanbytes(size):
 
 def format_time(seconds):
     """Format seconds to readable time"""
-    if seconds == 0:
+    if seconds == 0 or seconds is None:
         return "0s"
     
     periods = [
@@ -83,20 +83,3 @@ def format_time(seconds):
                 result.append(f"{int(period_value)}{period_name}")
     
     return ', '.join(result[:2]) if result else "0s"
-
-async def progress_bar(current, total, status_msg, action="Downloading"):
-    """
-    Simple progress bar for quick updates
-    """
-    try:
-        percentage = (current / total) * 100
-        filled = math.floor(percentage / 5)
-        bar = "●" * filled + "○" * (20 - filled)
-        
-        await status_msg.edit_text(
-            f"**{action}...**\n\n"
-            f"[{bar}]\n"
-            f"Progress: {percentage:.1f}%"
-        )
-    except:
-        pass
