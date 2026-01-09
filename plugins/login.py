@@ -174,18 +174,39 @@ async def manual_extraction_callback(client: Client, query: CallbackQuery):
     update_user_data(user_id, 'collected_links', [])
     
     await query.message.edit_text(
-        f"📱 **{app_name} - Manual**\n\n"
-        f"**Steps:**\n"
-        f"1. Open {app_url}\n"
-        f"2. Login yourself\n"
-        f"3. Play a video\n"
-        f"4. Press F12 → Network\n"
-        f"5. Find .m3u8 link\n"
-        f"6. Send here:\n\n"
-        f"`Title | http://link.m3u8`\n\n"
-        f"Type /done when finished",
+        f"📱 **{app_name} - Manual Extraction**\n\n"
+        f"━━━━━━━━━━━━━━━━━━\n\n"
+        f"**📖 Step-by-Step Guide:**\n\n"
+        f"**1. Open Website**\n"
+        f"   → Go to {app_url}\n"
+        f"   → Login with your credentials\n\n"
+        f"**2. Open Developer Tools**\n"
+        f"   → Press `F12` key\n"
+        f"   → OR Right-click → Inspect\n\n"
+        f"**3. Go to Network Tab**\n"
+        f"   → Click 'Network' at top\n"
+        f"   → (Optional) Filter by 'Media' or 'XHR'\n\n"
+        f"**4. Play a Video**\n"
+        f"   → Go to your batch\n"
+        f"   → Click any video to play\n\n"
+        f"**5. Find Links**\n"
+        f"   → Look for `.m3u8` or `.mp4` files\n"
+        f"   → OR `.pdf` for PDFs\n"
+        f"   → Right-click → Copy → Copy URL\n\n"
+        f"**6. Send Links Here**\n"
+        f"   Format: `Video Title | URL`\n\n"
+        f"**Example:**\n"
+        f"```\n"
+        f"Lecture 1 | https://masterapi.tech/video.m3u8\n"
+        f"Lecture 2 | https://masterapi.tech/video2.m3u8\n"
+        f"Notes PDF | https://masterapi.tech/notes.pdf\n"
+        f"```\n\n"
+        f"━━━━━━━━━━━━━━━━━━\n\n"
+        f"Send links one by one or multiple together.\n"
+        f"Type `/done` when finished!\n\n"
+        f"Use /cancel to stop",
         reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("🌐 Open", url=app_url)],
+            [InlineKeyboardButton("🌐 Open Website", url=app_url)],
             [InlineKeyboardButton("❌ Cancel", callback_data="cancel_login")]
         ])
     )
