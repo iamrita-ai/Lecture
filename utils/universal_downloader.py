@@ -11,32 +11,19 @@ from config import Config
 import time
 
 async def download_any_file(url: str, filename: str, status_msg, user_id=None) -> Optional[str]:
-    """
-    Universal downloader - Supports ANY file format
-    - M3U8/HLS videos
-    - Direct videos (MP4, MKV, etc.)
-    - Audio files
-    - Documents (PDF, APK, ZIP, RAR, etc.)
-    """
+    """Universal downloader - Optimized for speed"""
     try:
         clean_name = clean_filename(filename)
         
-        # Detect file type from URL
         is_m3u8 = '.m3u8' in url.lower() or '/hls' in url.lower()
         is_ts_chunk = '.ts' in url.lower() and ('master' in url.lower() or 'hls' in url.lower())
         
-        # If TS chunk, construct master.m3u8
         if is_ts_chunk and not is_m3u8:
-            print(f"TS chunk detected, constructing master.m3u8")
-            # Extract base URL
-            # Example: https://domain.com/path/360p/master-123.ts -> https://domain.com/path/360p/master.m3u8
             base_url = re.sub(r'/master-[\d.]+\.ts.*', '/master.m3u8', url)
             if base_url != url:
                 url = base_url
                 is_m3u8 = True
-                print(f"Constructed M3U8 URL: {url}")
         
-        # Add extension if missing
         if '.' not in clean_name or len(clean_name.split('.')[-1]) > 5:
             if is_m3u8 or is_ts_chunk:
                 clean_name += '.mp4'
@@ -50,87 +37,126 @@ async def download_any_file(url: str, filename: str, status_msg, user_id=None) -
                 clean_name += '.apk'
             elif '.zip' in url.lower():
                 clean_name += '.zip'
-            elif '.rar' in url.lower():
-                clean_name += '.rar'
             else:
                 clean_name += '.mp4'
         
         file_path = f"downloads/{clean_name}"
         os.makedirs("downloads", exist_ok=True)
         
-        # Download based on type
         if is_m3u8:
-            print(f"Downloading M3U8: {url}")
-            return await download_m3u8(url, file_path, status_msg, filename)
+            return await download_m3u8_fast(url, file_path, status_msg, filename)
         else:
-            print(f"Downloading direct file: {url}")
-            return await download_direct(url, file_path, status_msg, filename, user_id)
+            return await download_direct_fast(url, file_path, status_msg, filename, user_id)
             
     except Exception as e:
-        print(f"Universal download error: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"Download error: {e}")
         return None
 
 
-async def download_m3u8(url: str, output_path: str, status_msg, filename: str) -> Optional[str]:
-    """Download M3U8/HLS streams using ffmpeg"""
+async def download_m3u8_fast(url: str, output_path: str, status_msg, filename: str) -> Optional[str]:
+    """Fast M3U8 download with ffmpeg"""
     try:
         if status_msg:
             await status_msg.edit_text(
                 f"📥 **Downloading M3U8**\n\n"
                 f"`{filename}`\n\n"
-                f"⏳ Processing stream..."
+                f"⚡ Fast mode enabled..."
             )
-        
-        print(f"FFmpeg downloading: {url}")
         
         command = [
             'ffmpeg',
+            '-headers', 'User-Agent: Mozilla/5.0',
+            '-reconnect', '1',
+            '-reconnect_streamed', '1',
+            '-reconnect_delay_max', '5',
             '-i', url,
             '-c', 'copy',
             '-bsf:a', 'aac_adtstoasc',
             '-y',
-            '-loglevel', 'warning',
+            '-loglevel', 'error',
             '-stats',
             output_path
         ]
         
+        start_time = time.time()
+        last_update = start_time
+        
         process = await asyncio.create_subprocess_exec(
             *command,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
+            stderr=asyncio.subprocess.STDOUT
         )
         
-        stdout, stderr = await process.communicate()
+        # Monitor file size for progress
+        while process.returncode is None:
+            await asyncio.sleep(2)
+            
+            if os.path.exists(output_path):
+                size = os.path.getsize(output_path)
+                elapsed = time.time() - start_time
+                
+                if time.time() - last_update > 3:
+                    size_mb = size / (1024*1024)
+                    speed = size / elapsed if elapsed > 0 else 0
+                    speed_mb = speed / (1024*1024)
+                    
+                    try:
+                        await status_msg.edit_text(
+                            f"📥 **Downloading M3U8**\n\n"
+                            f"`{filename[:40]}...`\n\n"
+                            f"📦 Downloaded: {size_mb:.2f} MB\n"
+                            f"⚡ Speed: {speed_mb:.2f} MB/s\n"
+                            f"⏱️ Elapsed: {int(elapsed)}s"
+                        )
+                        last_update = time.time()
+                    except:
+                        pass
+            
+            try:
+                await asyncio.wait_for(process.wait(), timeout=0.1)
+            except asyncio.TimeoutError:
+                continue
         
         if process.returncode == 0:
             if os.path.exists(output_path) and os.path.getsize(output_path) > 1000:
-                size_mb = os.path.getsize(output_path) / (1024*1024)
-                print(f"✅ M3U8 downloaded: {size_mb:.2f} MB")
                 return output_path
-            else:
-                print("❌ Output file too small or empty")
-                return None
-        else:
-            error_msg = stderr.decode()[:500]
-            print(f"❌ FFmpeg error: {error_msg}")
-            return None
+        
+        return None
             
     except Exception as e:
-        print(f"M3U8 download error: {e}")
+        print(f"M3U8 error: {e}")
         return None
 
 
-async def download_direct(url: str, output_path: str, status_msg, filename: str, user_id=None) -> Optional[str]:
-    """Download direct file (any format)"""
+async def download_direct_fast(url: str, output_path: str, status_msg, filename: str, user_id=None) -> Optional[str]:
+    """Fast direct download with optimized settings"""
     try:
         from plugins.download import active_tasks
         
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, timeout=aiohttp.ClientTimeout(total=3600)) as resp:
+        # Optimized connector settings
+        connector = aiohttp.TCPConnector(
+            limit=100,
+            limit_per_host=30,
+            ttl_dns_cache=300
+        )
+        
+        timeout = aiohttp.ClientTimeout(
+            total=Config.DOWNLOAD_TIMEOUT,
+            connect=60,
+            sock_read=60
+        )
+        
+        async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': '*/*',
+                'Accept-Encoding': 'gzip, deflate',
+                'Connection': 'keep-alive'
+            }
+            
+            async with session.get(url, headers=headers) as resp:
                 if resp.status != 200:
-                    print(f"HTTP {resp.status} for {url}")
+                    print(f"HTTP {resp.status}")
                     return None
                 
                 total_size = int(resp.headers.get('content-length', 0))
@@ -139,7 +165,7 @@ async def download_direct(url: str, output_path: str, status_msg, filename: str,
                 
                 async with aiofiles.open(output_path, 'wb') as f:
                     async for chunk in resp.content.iter_chunked(Config.CHUNK_SIZE):
-                        if user_id and user_id in active_tasks and active_tasks[user_id]['cancelled']:
+                        if user_id and user_id in active_tasks and active_tasks[user_id].get('cancelled'):
                             return None
                         
                         await f.write(chunk)
@@ -156,8 +182,6 @@ async def download_direct(url: str, output_path: str, status_msg, filename: str,
                         )
                 
                 if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
-                    size_mb = os.path.getsize(output_path) / (1024*1024)
-                    print(f"✅ Downloaded: {size_mb:.2f} MB")
                     return output_path
                 return None
                 
