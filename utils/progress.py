@@ -4,8 +4,7 @@ import math
 async def progress_for_pyrogram(current, total, ud_type, message, start, filename=""):
     """
     Enhanced progress with ETA
-    Parameters from Pyrogram: current, total, *args
-    args = (ud_type, message, start, filename)
+    Parameters: current, total, ud_type, message, start, filename
     """
     now = time.time()
     
