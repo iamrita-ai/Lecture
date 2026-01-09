@@ -14,7 +14,6 @@ class UniversalPlatformAPI:
         self.session = None
         self.auth_token = None
         
-        # Load config
         self.base_url = self.config.get('base_url')
         self.endpoints = self.config.get('api_endpoints', {})
         self.headers = self.config.get('headers', {})
@@ -23,18 +22,15 @@ class UniversalPlatformAPI:
         self.data_key = self.config.get('response_data_key', 'data')
     
     async def ensure_session(self):
-        """Ensure session exists"""
         if not self.session or self.session.closed:
             timeout = aiohttp.ClientTimeout(total=30)
             self.session = aiohttp.ClientSession(timeout=timeout)
     
     async def close_session(self):
-        """Close session"""
         if self.session and not self.session.closed:
             await self.session.close()
     
     def format_payload(self, template: dict, **kwargs) -> dict:
-        """Format payload with actual values"""
         formatted = {}
         for key, value in template.items():
             if isinstance(value, str):
@@ -44,79 +40,63 @@ class UniversalPlatformAPI:
         return formatted
     
     async def login_with_password(self, phone: str, password: str) -> Optional[str]:
-    """Universal login method"""
-    await self.ensure_session()
-    
-    # Clean phone
-    phone = re.sub(r'\D', '', phone)
-    if not phone.startswith('91') and len(phone) == 10:
-        phone = '91' + phone
-    
-    # Get login endpoint
-    login_endpoint = self.endpoints.get('login')
-    if not login_endpoint:
-        print(f"❌ No login endpoint configured for {self.platform_id}")
+        await self.ensure_session()
+        
+        phone = re.sub(r'\D', '', phone)
+        if not phone.startswith('91') and len(phone) == 10:
+            phone = '91' + phone
+        
+        login_endpoint = self.endpoints.get('login')
+        if not login_endpoint:
+            print(f"No login endpoint for {self.platform_id}")
+            return None
+        
+        payload = self.format_payload(self.payload_format, phone=phone, password=password)
+        
+        base_urls = self.config.get('base_urls', [self.base_url])
+        
+        for base_url in base_urls:
+            url = f"{base_url}{login_endpoint}"
+            
+            try:
+                print(f"Trying: {url}")
+                
+                async with self.session.post(url, json=payload, headers=self.headers) as resp:
+                    print(f"Status: {resp.status}")
+                    
+                    if resp.status == 200:
+                        try:
+                            data = await resp.json()
+                            print(f"Response: {json.dumps(data, indent=2)[:500]}")
+                            
+                            token = None
+                            
+                            if self.token_key in data:
+                                token = data[self.token_key]
+                            elif self.data_key in data and isinstance(data[self.data_key], dict):
+                                token = data[self.data_key].get(self.token_key)
+                            else:
+                                for key in ['token', 'access_token', 'auth_token', 'jwt']:
+                                    if key in data:
+                                        token = data[key]
+                                        break
+                            
+                            if token:
+                                self.auth_token = token
+                                self.base_url = base_url
+                                print(f"Login successful!")
+                                return token
+                        except Exception as e:
+                            print(f"JSON Error: {e}")
+                            
+            except Exception as e:
+                print(f"Error for {base_url}: {e}")
+                continue
+        
+        print("All login attempts failed")
         return None
     
-    # Format payload
-    payload = self.format_payload(self.payload_format, phone=phone, password=password)
-    
-    # Try multiple base URLs if available
-    base_urls = self.config.get('base_urls', [self.base_url])
-    
-    for base_url in base_urls:
-        url = f"{base_url}{login_endpoint}"
-        
-        try:
-            print(f"🔐 Trying: {url}")
-            print(f"📦 Payload: {payload}")
-            
-            async with self.session.post(
-                url,
-                json=payload,
-                headers=self.headers,
-                timeout=aiohttp.ClientTimeout(total=15)
-            ) as resp:
-                print(f"📡 Status: {resp.status}")
-                
-                if resp.status == 200:
-                    try:
-                        data = await resp.json()
-                        print(f"📥 Response: {json.dumps(data, indent=2)[:500]}")
-                        
-                        # Extract token
-                        token = None
-                        
-                        if self.token_key in data:
-                            token = data[self.token_key]
-                        elif self.data_key in data and isinstance(data[self.data_key], dict):
-                            token = data[self.data_key].get(self.token_key)
-                        else:
-                            for key in ['token', 'access_token', 'auth_token', 'jwt']:
-                                if key in data:
-                                    token = data[key]
-                                    break
-                        
-                        if token:
-                            self.auth_token = token
-                            self.base_url = base_url  # Update to working URL
-                            print(f"✅ Login successful!")
-                            return token
-                    except Exception as e:
-                        print(f"❌ JSON Error: {e}")
-                        
-        except aiohttp.ClientConnectorError as e:
-            print(f"❌ Connection Error for {base_url}: {e}")
-            continue
-        except Exception as e:
-            print(f"❌ Error for {base_url}: {e}")
-            continue
-    
-    print(f"❌ All login attempts failed")
-    return None
-    
     async def send_otp(self, phone: str) -> bool:
-        """Send OTP"""
         await self.ensure_session()
         
         phone = re.sub(r'\D', '', phone)
@@ -141,7 +121,6 @@ class UniversalPlatformAPI:
         return False
     
     async def verify_otp(self, phone: str, otp: str) -> Optional[str]:
-        """Verify OTP"""
         await self.ensure_session()
         
         phone = re.sub(r'\D', '', phone)
@@ -169,16 +148,15 @@ class UniversalPlatformAPI:
         return None
     
     async def get_batches(self) -> List[Dict]:
-        """Get user's batches"""
         await self.ensure_session()
         
         if not self.auth_token:
-            print("❌ No auth token available")
+            print("No auth token")
             return []
         
         endpoint = self.endpoints.get('get_batches')
         if not endpoint:
-            print(f"❌ No get_batches endpoint configured")
+            print("No get_batches endpoint")
             return []
         
         url = f"{self.base_url}{endpoint}"
@@ -186,59 +164,53 @@ class UniversalPlatformAPI:
         headers['Authorization'] = f"Bearer {self.auth_token}"
         
         try:
-            print(f"📚 Fetching batches from {url}")
+            print(f"Fetching batches from {url}")
             
             async with self.session.get(url, headers=headers) as resp:
-                print(f"📡 Response Status: {resp.status}")
+                print(f"Status: {resp.status}")
                 
                 if resp.status == 200:
                     data = await resp.json()
-                    print(f"📥 Batches Response: {json.dumps(data, indent=2)[:500]}")
+                    print(f"Batches: {json.dumps(data, indent=2)[:500]}")
                     
-                    # Try to extract batches
                     batches = None
                     
-                    # Direct data key
                     if self.data_key in data:
                         batches = data[self.data_key]
-                    # Try common keys
                     else:
-                        for key in ['courses', 'batches', 'data', 'subscriptions', 'purchases']:
+                        for key in ['courses', 'batches', 'data', 'subscriptions']:
                             if key in data:
                                 batches = data[key]
                                 break
                     
-                    # If still not found, assume data itself is the list
                     if not batches and isinstance(data, list):
                         batches = data
                     
                     if batches and isinstance(batches, list):
-                        print(f"✅ Found {len(batches)} batches")
+                        print(f"Found {len(batches)} batches")
                         return batches
                     else:
-                        print(f"⚠️ No batches in response")
+                        print("No batches in response")
                 else:
                     text = await resp.text()
-                    print(f"❌ Fetch batches failed: {text[:200]}")
+                    print(f"Failed: {text[:200]}")
         except Exception as e:
-            print(f"❌ Get Batches Exception: {e}")
+            print(f"Exception: {e}")
         
         return []
     
     async def get_batch_content(self, batch_id: str) -> List[Dict]:
-        """Get batch content (videos/PDFs)"""
         await self.ensure_session()
         
         if not self.auth_token:
-            print("❌ No auth token")
+            print("No auth token")
             return []
         
         endpoint = self.endpoints.get('get_batch_content')
         if not endpoint:
-            print("❌ No content endpoint configured")
+            print("No content endpoint")
             return []
         
-        # Replace {batch_id} placeholder
         endpoint = endpoint.replace('{batch_id}', str(batch_id))
         
         url = f"{self.base_url}{endpoint}"
@@ -246,46 +218,41 @@ class UniversalPlatformAPI:
         headers['Authorization'] = f"Bearer {self.auth_token}"
         
         try:
-            print(f"📝 Fetching content from {url}")
+            print(f"Fetching content from {url}")
             
             async with self.session.get(url, headers=headers) as resp:
-                print(f"📡 Response Status: {resp.status}")
+                print(f"Status: {resp.status}")
                 
                 if resp.status == 200:
                     data = await resp.json()
-                    print(f"📥 Content Response: {json.dumps(data, indent=2)[:800]}")
+                    print(f"Content: {json.dumps(data, indent=2)[:800]}")
                     
-                    # Try to extract content
                     content = None
                     
-                    # Try data key
                     if self.data_key in data:
                         content = data[self.data_key]
-                    # Try common keys
                     else:
-                        for key in ['content', 'lectures', 'lessons', 'videos', 'data', 'items']:
+                        for key in ['content', 'lectures', 'lessons', 'videos', 'data']:
                             if key in data:
                                 content = data[key]
                                 break
                     
-                    # If list directly
                     if not content and isinstance(data, list):
                         content = data
                     
                     if content and isinstance(content, list):
-                        print(f"✅ Found {len(content)} items")
+                        print(f"Found {len(content)} items")
                         return content
                     else:
-                        print(f"⚠️ No content found")
+                        print("No content found")
                 else:
                     text = await resp.text()
-                    print(f"❌ Fetch content failed: {text[:200]}")
+                    print(f"Failed: {text[:200]}")
         except Exception as e:
-            print(f"❌ Get Content Exception: {e}")
+            print(f"Exception: {e}")
         
         return []
 
 
 def get_platform_api(platform_id: str):
-    """Factory function to get API client"""
     return UniversalPlatformAPI(platform_id)
