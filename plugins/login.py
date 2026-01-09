@@ -107,20 +107,28 @@ async def app_selected_callback(client: Client, query: CallbackQuery):
     user_id = query.from_user.id
     
     buttons = [
-        [InlineKeyboardButton("🔐 Auto Login", callback_data=f"auto_{app_id}")],
-        [InlineKeyboardButton("📋 Manual Extraction", callback_data=f"manual_{app_id}")],
+        [InlineKeyboardButton("📋 Manual Extraction (Recommended)", callback_data=f"manual_{app_id}")],
+        [InlineKeyboardButton("🔐 Auto Login (Experimental)", callback_data=f"auto_{app_id}")],
         [InlineKeyboardButton("❌ Cancel", callback_data="start")]
     ]
     
     await query.message.edit_text(
-        f"📱 **{app_name}**\n\n"
+        f"📱 **{app_name}**\n"
+        f"🌐 Website: `{app_url}`\n\n"
+        f"━━━━━━━━━━━━━━━━━━\n\n"
         f"**Choose Method:**\n\n"
-        f"🔐 **Auto:** Bot tries to login\n"
-        f"📋 **Manual:** You extract links yourself\n\n"
-        f"Recommended: Manual (100% working)",
+        f"📋 **Manual (100% Working):**\n"
+        f"• You login on website yourself\n"
+        f"• Extract M3U8 links using browser\n"
+        f"• Send links to bot\n"
+        f"• Bot downloads & sends files\n\n"
+        f"🔐 **Auto (May Not Work):**\n"
+        f"• Bot tries to login via API\n"
+        f"• Works only if API is public\n"
+        f"• RG Vikramjeet API may be private\n\n"
+        f"**✅ Recommended: Use Manual Method**",
         reply_markup=InlineKeyboardMarkup(buttons)
     )
-
 @Client.on_callback_query(filters.regex("^auto_"))
 async def auto_login_callback(client: Client, query: CallbackQuery):
     app_id = query.data.split("_")[1]
