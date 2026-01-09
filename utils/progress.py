@@ -3,60 +3,62 @@ import math
 
 async def progress_for_pyrogram(current, total, ud_type, message, start, filename=""):
     """
-    Enhanced progress with ETA
-    Parameters: current, total, ud_type, message, start, filename
+    Enhanced progress with error handling
     """
-    now = time.time()
-    
-    # Ensure start is a number
-    if isinstance(start, str):
-        start = time.time()
-    
-    diff = now - start
-    
-    # Update every 2 seconds or at completion
-    if round(diff % 2) == 0 or current == total:
+    try:
+        now = time.time()
+        
+        # Ensure start is valid
+        if not isinstance(start, (int, float)):
+            start = time.time()
+        
+        diff = now - start
+        
+        # Update every 5 seconds to reduce API calls
+        if diff < 1 or (round(diff % 5) != 0 and current != total):
+            return
+        
+        if total == 0:
+            return
+        
+        percentage = current * 100 / total
+        speed = current / diff if diff > 0 else 0
+        eta_seconds = round((total - current) / speed) if speed > 0 else 0
+        
+        # Progress bar
+        filled = math.floor(percentage / 5)
+        empty = 20 - filled
+        bar = "●" * filled + "○" * empty
+        
+        # Format
+        eta = format_time(eta_seconds)
+        elapsed = format_time(int(diff))
+        current_size = humanbytes(current)
+        total_size = humanbytes(total)
+        speed_fmt = humanbytes(speed)
+        
+        # Truncate filename
+        if len(filename) > 40:
+            filename = filename[:37] + "..."
+        
+        # Create message
+        text = f"**{ud_type}**\n\n"
+        text += f"`{filename}`\n"
+        text += f"**to server**\n\n"
+        text += f"[{bar}]\n"
+        text += f"◌ **Progress😉:** 〘 {percentage:.2f}% 〙\n"
+        text += f"**Done:** 〘{current_size} of {total_size}〙\n"
+        text += f"◌ **Speed🚀:** 〘 {speed_fmt}/s 〙\n"
+        text += f"◌ **Time Left⏳:** 〘 {eta} 〙\n"
+        text += f"⏱️ **Elapsed:** 〘 {elapsed} 〙"
+        
         try:
-            if total == 0:
-                return
-            
-            percentage = current * 100 / total
-            speed = current / diff if diff > 0 else 0
-            eta_seconds = round((total - current) / speed) if speed > 0 else 0
-            
-            # Progress bar
-            filled = math.floor(percentage / 5)
-            empty = 20 - filled
-            bar = "●" * filled + "○" * empty
-            
-            # Format time
-            eta = format_time(eta_seconds)
-            elapsed = format_time(int(diff))
-            
-            # Format sizes
-            current_size = humanbytes(current)
-            total_size = humanbytes(total)
-            speed_fmt = humanbytes(speed)
-            
-            # Truncate filename
-            if len(filename) > 40:
-                filename = filename[:37] + "..."
-            
-            # Create message
-            text = f"**{ud_type}**\n\n"
-            text += f"`{filename}`\n"
-            text += f"**to server**\n\n"
-            text += f"[{bar}]\n"
-            text += f"◌ **Progress😉:** 〘 {percentage:.2f}% 〙\n"
-            text += f"**Done:** 〘{current_size} of {total_size}〙\n"
-            text += f"◌ **Speed🚀:** 〘 {speed_fmt}/s 〙\n"
-            text += f"◌ **Time Left⏳:** 〘 {eta} 〙\n"
-            text += f"⏱️ **Elapsed:** 〘 {elapsed} 〙"
-            
             await message.edit_text(text)
-            
-        except Exception as e:
+        except:
             pass
+            
+    except Exception as e:
+        pass
 
 def humanbytes(size):
     """Convert bytes to human readable"""
