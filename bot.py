@@ -1,11 +1,15 @@
 import asyncio
-from pyrogram import Client, filters
+from pyrogram import Client
 from pyrogram.errors import FloodWait
 from config import Config
 import logging
-from database.database import Database
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logging.getLogger("pyrogram").setLevel(logging.WARNING)
+
 logger = logging.getLogger(__name__)
 
 class Bot(Client):
@@ -16,24 +20,31 @@ class Bot(Client):
             api_hash=Config.API_HASH,
             bot_token=Config.BOT_TOKEN,
             plugins=dict(root="plugins"),
-            sleep_threshold=30
+            sleep_threshold=30,
+            workers=50,  # Increased workers for faster uploads
+            no_updates=False,
+            max_concurrent_transmissions=10  # More concurrent uploads
         )
-        self.db = Database(Config.MONGO_URI)
+        self.db = None
         
     async def start(self):
         await super().start()
+        
+        from database.database import Database
+        self.db = Database(Config.MONGO_URI)
+        
         me = await self.get_me()
         self.username = me.username
         logger.info(f"✅ {me.first_name} Started!")
         
-        # Send start notification to log channel
         try:
             await self.send_message(
                 Config.LOG_CHANNEL,
-                f"🤖 **{Config.BOT_NAME} Started Successfully!**\n\n"
+                f"🤖 **{Config.BOT_NAME} Started!**\n\n"
                 f"👤 Bot: @{self.username}\n"
                 f"🆔 ID: `{me.id}`\n"
-                f"📊 Status: Active"
+                f"📊 Status: Active\n"
+                f"⚡ Optimized for speed"
             )
         except Exception as e:
             logger.error(f"Failed to send start message: {e}")
