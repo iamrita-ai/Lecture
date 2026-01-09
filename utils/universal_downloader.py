@@ -11,7 +11,7 @@ from config import Config
 import time
 
 async def download_any_file(url: str, filename: str, status_msg, user_id=None) -> Optional[str]:
-    """Universal downloader - Optimized for speed"""
+    """Universal downloader with error handling"""
     try:
         clean_name = clean_filename(filename)
         
@@ -54,14 +54,17 @@ async def download_any_file(url: str, filename: str, status_msg, user_id=None) -
 
 
 async def download_m3u8_fast(url: str, output_path: str, status_msg, filename: str) -> Optional[str]:
-    """Fast M3U8 download with ffmpeg"""
+    """Fast M3U8 download"""
     try:
         if status_msg:
-            await status_msg.edit_text(
-                f"📥 **Downloading M3U8**\n\n"
-                f"`{filename}`\n\n"
-                f"⚡ Fast mode enabled..."
-            )
+            try:
+                await status_msg.edit_text(
+                    f"📥 **Downloading M3U8**\n\n"
+                    f"`{filename[:40]}...`\n\n"
+                    f"⚡ Fast mode..."
+                )
+            except:
+                pass
         
         command = [
             'ffmpeg',
@@ -74,7 +77,6 @@ async def download_m3u8_fast(url: str, output_path: str, status_msg, filename: s
             '-bsf:a', 'aac_adtstoasc',
             '-y',
             '-loglevel', 'error',
-            '-stats',
             output_path
         ]
         
@@ -83,43 +85,43 @@ async def download_m3u8_fast(url: str, output_path: str, status_msg, filename: s
         
         process = await asyncio.create_subprocess_exec(
             *command,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL
         )
         
-        # Monitor file size for progress
-        while process.returncode is None:
-            await asyncio.sleep(2)
+        # Monitor progress
+        while True:
+            await asyncio.sleep(3)
             
-            if os.path.exists(output_path):
-                size = os.path.getsize(output_path)
+            # Check if process finished
+            if process.returncode is not None:
+                break
+            
+            try:
+                await asyncio.wait_for(process.wait(), timeout=0.1)
+                break
+            except asyncio.TimeoutError:
+                pass
+            
+            # Update status
+            if os.path.exists(output_path) and status_msg:
                 elapsed = time.time() - start_time
-                
-                if time.time() - last_update > 3:
-                    size_mb = size / (1024*1024)
-                    speed = size / elapsed if elapsed > 0 else 0
-                    speed_mb = speed / (1024*1024)
+                if time.time() - last_update > 5:
+                    size_mb = os.path.getsize(output_path) / (1024*1024)
                     
                     try:
                         await status_msg.edit_text(
                             f"📥 **Downloading M3U8**\n\n"
                             f"`{filename[:40]}...`\n\n"
-                            f"📦 Downloaded: {size_mb:.2f} MB\n"
-                            f"⚡ Speed: {speed_mb:.2f} MB/s\n"
-                            f"⏱️ Elapsed: {int(elapsed)}s"
+                            f"📦 {size_mb:.2f} MB\n"
+                            f"⏱️ {int(elapsed)}s"
                         )
                         last_update = time.time()
                     except:
                         pass
-            
-            try:
-                await asyncio.wait_for(process.wait(), timeout=0.1)
-            except asyncio.TimeoutError:
-                continue
         
-        if process.returncode == 0:
-            if os.path.exists(output_path) and os.path.getsize(output_path) > 1000:
-                return output_path
+        if os.path.exists(output_path) and os.path.getsize(output_path) > 1000:
+            return output_path
         
         return None
             
@@ -129,29 +131,28 @@ async def download_m3u8_fast(url: str, output_path: str, status_msg, filename: s
 
 
 async def download_direct_fast(url: str, output_path: str, status_msg, filename: str, user_id=None) -> Optional[str]:
-    """Fast direct download with optimized settings"""
+    """Fast direct download"""
     try:
         from plugins.download import active_tasks
         
-        # Optimized connector settings
         connector = aiohttp.TCPConnector(
-            limit=100,
-            limit_per_host=30,
-            ttl_dns_cache=300
+            limit=50,
+            limit_per_host=20,
+            ttl_dns_cache=300,
+            force_close=False,
+            enable_cleanup_closed=True
         )
         
         timeout = aiohttp.ClientTimeout(
-            total=Config.DOWNLOAD_TIMEOUT,
+            total=None,
             connect=60,
-            sock_read=60
+            sock_read=120
         )
         
         async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Accept': '*/*',
-                'Accept-Encoding': 'gzip, deflate',
-                'Connection': 'keep-alive'
+                'Accept': '*/*'
             }
             
             async with session.get(url, headers=headers) as resp:
@@ -163,23 +164,32 @@ async def download_direct_fast(url: str, output_path: str, status_msg, filename:
                 downloaded = 0
                 start_time = time.time()
                 
-                async with aiofiles.open(output_path, 'wb') as f:
-                    async for chunk in resp.content.iter_chunked(Config.CHUNK_SIZE):
-                        if user_id and user_id in active_tasks and active_tasks[user_id].get('cancelled'):
-                            return None
-                        
-                        await f.write(chunk)
-                        downloaded += len(chunk)
-                        
-                        # Update progress
-                        await progress_for_pyrogram(
-                            downloaded,
-                            total_size,
-                            "Downloading",
-                            status_msg,
-                            start_time,
-                            filename
-                        )
+                # Ensure file can be written
+                try:
+                    async with aiofiles.open(output_path, 'wb') as f:
+                        async for chunk in resp.content.iter_chunked(Config.CHUNK_SIZE):
+                            if user_id and user_id in active_tasks and active_tasks[user_id].get('cancelled'):
+                                return None
+                            
+                            await f.write(chunk)
+                            downloaded += len(chunk)
+                            
+                            # Update progress
+                            if status_msg:
+                                try:
+                                    await progress_for_pyrogram(
+                                        downloaded,
+                                        total_size,
+                                        "Downloading",
+                                        status_msg,
+                                        start_time,
+                                        filename
+                                    )
+                                except:
+                                    pass
+                except Exception as write_error:
+                    print(f"Write error: {write_error}")
+                    return None
                 
                 if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
                     return output_path
