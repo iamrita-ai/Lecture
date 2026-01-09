@@ -22,20 +22,19 @@ class Config:
     BOT_NAME = "Serena Lec"
     FREE_LIMIT = 10
     DOWNLOAD_DELAY = 5
-    PROGRESS_UPDATE_DELAY = 3
+    PROGRESS_UPDATE_DELAY = 5
     
     # Flask
     PORT = int(environ.get("PORT", 8080))
     
-    # Download Settings - OPTIMIZED
-    CHUNK_SIZE = 5 * 1024 * 1024  # 5MB chunks (faster)
-    MAX_CONCURRENT_DOWNLOADS = 5
-    DOWNLOAD_TIMEOUT = 7200  # 2 hours timeout
+    # Download Settings - Optimized for Render
+    CHUNK_SIZE = 2 * 1024 * 1024  # 2MB chunks
+    MAX_CONCURRENT_DOWNLOADS = 3
+    DOWNLOAD_TIMEOUT = 10800  # 3 hours
     
-    # Upload Settings - OPTIMIZED  
-    UPLOAD_CHUNK_SIZE = 512 * 1024  # 512KB for Telegram
-    UPLOAD_TIMEOUT = 3600  # 1 hour
+    # Upload Settings
+    UPLOAD_TIMEOUT = 7200  # 2 hours
     
     # Flood Control
-    FLOOD_SLEEP = 5
-    ETA_UPDATE_INTERVAL = 2
+    FLOOD_SLEEP = 3
+    ETA_UPDATE_INTERVAL = 5
