@@ -199,16 +199,14 @@ async def process_txt_file(client: Client, message: Message):
                     upload_msg = await status.edit_text(
                         f"📤 **Uploading**\n\n`{file_data['title']}`"
                     )
-                    
-                    # Send based on type
-                                        if file_ext in ['mp4', 'mkv', 'avi', 'mov', 'flv', 'wmv', 'webm']:
+                                        # Send based on type
+                    if file_ext in ['mp4', 'mkv', 'avi', 'mov', 'flv', 'wmv', 'webm']:
                         # Video
                         thumb = None
                         if thumbnail_mode == 'random' and random.randint(1, 3) == 1:
                             thumb = await generate_thumbnail()
                         
-                        # Optimized upload
-                        sent = await client.send_video(
+                        await client.send_video(
                             chat_id=target_chat,
                             video=file_path,
                             caption=caption,
@@ -422,6 +420,7 @@ async def download_single_file(client: Client, message: Message):
                 video=file_path,
                 caption=caption,
                 thumb=thumb,
+                supports_streaming=True,
                 reply_to_message_id=message.id,
                 progress=progress_for_pyrogram,
                 progress_args=(status, time.time(), filename)
