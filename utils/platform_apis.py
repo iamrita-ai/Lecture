@@ -44,76 +44,76 @@ class UniversalPlatformAPI:
         return formatted
     
     async def login_with_password(self, phone: str, password: str) -> Optional[str]:
-        """Universal login method"""
-        await self.ensure_session()
-        
-        # Clean phone
-        phone = re.sub(r'\D', '', phone)
-        if not phone.startswith('91') and len(phone) == 10:
-            phone = '91' + phone
-        
-        # Get login endpoint
-        login_endpoint = self.endpoints.get('login')
-        if not login_endpoint:
-            print(f"❌ No login endpoint configured for {self.platform_id}")
-            return None
-        
-        # Format payload
-        payload = self.format_payload(self.payload_format, phone=phone, password=password)
-        
-        # Make request
-        url = f"{self.base_url}{login_endpoint}"
+    """Universal login method"""
+    await self.ensure_session()
+    
+    # Clean phone
+    phone = re.sub(r'\D', '', phone)
+    if not phone.startswith('91') and len(phone) == 10:
+        phone = '91' + phone
+    
+    # Get login endpoint
+    login_endpoint = self.endpoints.get('login')
+    if not login_endpoint:
+        print(f"❌ No login endpoint configured for {self.platform_id}")
+        return None
+    
+    # Format payload
+    payload = self.format_payload(self.payload_format, phone=phone, password=password)
+    
+    # Try multiple base URLs if available
+    base_urls = self.config.get('base_urls', [self.base_url])
+    
+    for base_url in base_urls:
+        url = f"{base_url}{login_endpoint}"
         
         try:
-            print(f"🔐 Attempting login to {url}")
+            print(f"🔐 Trying: {url}")
             print(f"📦 Payload: {payload}")
             
             async with self.session.post(
                 url,
                 json=payload,
-                headers=self.headers
+                headers=self.headers,
+                timeout=aiohttp.ClientTimeout(total=15)
             ) as resp:
-                print(f"📡 Response Status: {resp.status}")
+                print(f"📡 Status: {resp.status}")
                 
                 if resp.status == 200:
                     try:
                         data = await resp.json()
                         print(f"📥 Response: {json.dumps(data, indent=2)[:500]}")
                         
-                        # Try to extract token
+                        # Extract token
                         token = None
                         
-                        # Direct key
                         if self.token_key in data:
                             token = data[self.token_key]
-                        # Nested in data
                         elif self.data_key in data and isinstance(data[self.data_key], dict):
                             token = data[self.data_key].get(self.token_key)
-                        # Try common alternatives
                         else:
-                            for key in ['token', 'access_token', 'auth_token', 'jwt', 'authorization']:
+                            for key in ['token', 'access_token', 'auth_token', 'jwt']:
                                 if key in data:
                                     token = data[key]
                                     break
                         
                         if token:
                             self.auth_token = token
-                            print(f"✅ Login successful! Token: {token[:20]}...")
+                            self.base_url = base_url  # Update to working URL
+                            print(f"✅ Login successful!")
                             return token
-                        else:
-                            print(f"⚠️ No token found in response")
                     except Exception as e:
-                        print(f"❌ JSON Parse Error: {e}")
-                        text = await resp.text()
-                        print(f"📄 Response Text: {text[:500]}")
-                else:
-                    text = await resp.text()
-                    print(f"❌ Login failed: {resp.status} - {text[:200]}")
-                    
+                        print(f"❌ JSON Error: {e}")
+                        
+        except aiohttp.ClientConnectorError as e:
+            print(f"❌ Connection Error for {base_url}: {e}")
+            continue
         except Exception as e:
-            print(f"❌ Login Exception: {e}")
-        
-        return None
+            print(f"❌ Error for {base_url}: {e}")
+            continue
+    
+    print(f"❌ All login attempts failed")
+    return None
     
     async def send_otp(self, phone: str) -> bool:
         """Send OTP"""
