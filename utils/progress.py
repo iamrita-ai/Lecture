@@ -3,9 +3,16 @@ import math
 
 async def progress_for_pyrogram(current, total, ud_type, message, start, filename=""):
     """
-    Enhanced progress with ETA - Updates every 2-3 seconds
+    Enhanced progress with ETA
+    Parameters from Pyrogram: current, total, *args
+    args = (ud_type, message, start, filename)
     """
     now = time.time()
+    
+    # Ensure start is a number
+    if isinstance(start, str):
+        start = time.time()
+    
     diff = now - start
     
     # Update every 2 seconds or at completion
@@ -32,9 +39,13 @@ async def progress_for_pyrogram(current, total, ud_type, message, start, filenam
             total_size = humanbytes(total)
             speed_fmt = humanbytes(speed)
             
+            # Truncate filename
+            if len(filename) > 40:
+                filename = filename[:37] + "..."
+            
             # Create message
             text = f"**{ud_type}**\n\n"
-            text += f"`{filename[:40]}...`\n"
+            text += f"`{filename}`\n"
             text += f"**to server**\n\n"
             text += f"[{bar}]\n"
             text += f"◌ **Progress😉:** 〘 {percentage:.2f}% 〙\n"
