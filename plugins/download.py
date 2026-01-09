@@ -1,68 +1,332 @@
-async def download_file(url, filename, status_msg, action="Downloading", user_id=None):
-    """Download file with M3U8 support"""
+from pyrogram import Client, filters
+from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
+from utils.progress import progress_for_pyrogram
+from utils.helpers import clean_filename, generate_thumbnail
+from utils.universal_downloader import download_any_file
+from config import Config
+import asyncio
+import os
+import time
+import random
+import aiofiles
+import re
+
+# Store active tasks
+active_tasks = {}
+
+@Client.on_message(filters.command("cancel") & filters.private)
+async def cancel_task(client: Client, message: Message):
+    """Cancel ongoing download task"""
+    user_id = message.from_user.id
+    
+    if user_id in active_tasks:
+        active_tasks[user_id]['cancelled'] = True
+        await message.reply_text(
+            "🛑 **Cancelling...**\n\n"
+            "⏳ Stopping downloads...\n"
+            "🗑️ Cleaning up files..."
+        )
+    else:
+        await message.reply_text("❌ **No active task!**")
+
+@Client.on_message(filters.document & filters.private)
+async def handle_txt_file(client: Client, message: Message):
+    """Handle TXT file uploads - Universal Support"""
+    user_id = message.from_user.id
+    
+    if await client.db.is_bot_locked() and user_id not in Config.OWNERS:
+        return
+    
+    if user_id in active_tasks and not active_tasks[user_id].get('cancelled'):
+        await message.reply_text("⚠️ **Task already running!**\n\nUse /cancel first")
+        return
+    
+    if not message.document.file_name.endswith('.txt'):
+        return
+    
+    await process_txt_file(client, message)
+
+async def process_txt_file(client: Client, message: Message):
+    """Process TXT file - Universal Format Support"""
+    user_id = message.from_user.id
+    is_premium = await client.db.is_premium(user_id)
+    
+    active_tasks[user_id] = {'cancelled': False, 'status': 'starting'}
+    
     try:
-        clean_name = clean_filename(filename)
+        if not is_premium:
+            await message.reply_text(
+                "⚠️ **Premium Required!**\n\n"
+                "TXT batch downloads need premium.\n\n"
+                "Free users can send direct links!",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("👤 Owner", url="https://t.me/technicalserena")]
+                ])
+            )
+            del active_tasks[user_id]
+            return
         
-        # Check if M3U8
-        is_m3u8 = '.m3u8' in url.lower()
+        status = await message.reply_text("📥 **Processing TXT file...**")
         
-        if not any(clean_name.endswith(ext) for ext in ['.mp4', '.mkv', '.avi', '.pdf', '.mov']):
-            if '.pdf' in url.lower():
-                clean_name += '.pdf'
-            else:
-                clean_name += '.mp4'
+        file_path = await message.download()
         
-        file_path = f"downloads/{clean_name}"
+        async with aiofiles.open(file_path, 'r', encoding='utf-8') as f:
+            content = await f.read()
+            lines = content.strip().split('\n')
         
-        os.makedirs("downloads", exist_ok=True)
+        try:
+            os.remove(file_path)
+        except:
+            pass
         
-        if is_m3u8:
-            print(f"Downloading M3U8: {url}")
-            # Use M3U8 downloader
-            from utils.m3u8_downloader import download_m3u8_video, download_m3u8_simple
+        if active_tasks[user_id]['cancelled']:
+            await status.edit_text("🛑 **Cancelled!**")
+            del active_tasks[user_id]
+            return
+        
+        # Parse all lines - Universal format support
+        files = []
+        
+        for line in lines:
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
             
-            result = await download_m3u8_video(url, file_path, status_msg, filename)
+            title = None
+            url = None
             
-            if not result:
-                # Try simple method
-                print("Trying simple M3U8 method...")
-                result = await download_m3u8_simple(url, file_path)
+            if '|' in line:
+                parts = line.split('|', 1)
+                title = parts[0].strip()
+                url = parts[1].strip()
+            elif line.startswith('http'):
+                url = line
+                title = f"File {len(files)+1}"
             
-            return result
+            if url:
+                files.append({'title': title, 'url': url})
+        
+        if not files:
+            await status.edit_text("❌ **No valid links found!**")
+            del active_tasks[user_id]
+            return
+        
+        await status.edit_text(
+            f"📊 **Found {len(files)} files**\n\n"
+            f"⏳ Starting downloads...\n\n"
+            f"💡 Use /cancel to stop"
+        )
+        
+        await asyncio.sleep(2)
+        
+        settings = await client.db.get_user_settings(user_id)
+        credit = settings.get('credit', 'Serena')
+        channel_id = settings.get('channel_id')
+        thumbnail_mode = settings.get('thumbnail_mode', 'random')
+        
+        if channel_id:
+            try:
+                await client.get_chat(channel_id)
+                target_chat = channel_id
+                reply_to = None
+            except:
+                target_chat = message.chat.id
+                reply_to = message.id
         else:
-            # Regular download
-            print(f"Downloading regular file: {url}")
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=aiohttp.ClientTimeout(total=3600)) as resp:
-                    if resp.status == 200:
-                        total_size = int(resp.headers.get('content-length', 0))
-                        downloaded = 0
-                        start_time = time.time()
-                        
-                        async with aiofiles.open(file_path, 'wb') as f:
-                            async for chunk in resp.content.iter_chunked(Config.CHUNK_SIZE):
-                                if user_id and user_id in active_tasks and active_tasks[user_id]['cancelled']:
-                                    return None
-                                
-                                await f.write(chunk)
-                                downloaded += len(chunk)
-                                
-                                await progress_for_pyrogram(
-                                    downloaded, 
-                                    total_size, 
-                                    action, 
-                                    status_msg, 
-                                    start_time, 
-                                    filename
-                                )
-                        
-                        return file_path
-                    else:
-                        print(f"Download failed: Status {resp.status}")
-                        return None
+            target_chat = message.chat.id
+            reply_to = message.id
+        
+        is_topic = False
+        topic_id = None
+        if target_chat == message.chat.id and hasattr(message, 'message_thread_id'):
+            is_topic = True
+            topic_id = message.message_thread_id
+        
+        try:
+            await status.pin()
+        except:
+            pass
+        
+        active_tasks[user_id]['status'] = 'downloading'
+        
+        success = 0
+        failed = 0
+        failed_files = []
+        
+        for idx, file_data in enumerate(files, 1):
+            if active_tasks[user_id]['cancelled']:
+                await status.edit_text(
+                    f"🛑 **Cancelled!**\n\n"
+                    f"✅ Success: {success}\n"
+                    f"❌ Failed: {failed}"
+                )
+                break
+            
+            try:
+                await status.edit_text(
+                    f"📥 **Downloading Files**\n\n"
+                    f"📊 Progress: `{idx}/{len(files)}`\n"
+                    f"📝 Current: `{file_data['title'][:50]}...`\n\n"
+                    f"✅ Success: {success}\n"
+                    f"❌ Failed: {failed}\n\n"
+                    f"💡 /cancel to stop"
+                )
+                
+                # Universal download
+                file_path = await download_any_file(
+                    file_data['url'],
+                    file_data['title'],
+                    status,
+                    user_id
+                )
+                
+                if active_tasks[user_id]['cancelled']:
+                    if file_path and os.path.exists(file_path):
+                        try:
+                            os.remove(file_path)
+                        except:
+                            pass
+                    break
+                
+                if file_path and os.path.exists(file_path):
+                    caption = f"📁 **{file_data['title']}**\n\n"
+                    caption += f"📊 File {idx} of {len(files)}\n"
+                    caption += f"✨ Extracted by: {credit}"
                     
+                    # Detect file type
+                    file_ext = file_path.split('.')[-1].lower()
+                    
+                    upload_msg = await status.edit_text(
+                        f"📤 **Uploading**\n\n`{file_data['title']}`"
+                    )
+                    
+                    # Send based on type
+                    if file_ext in ['mp4', 'mkv', 'avi', 'mov', 'flv', 'wmv', 'webm']:
+                        # Video
+                        thumb = None
+                        if thumbnail_mode == 'random' and random.randint(1, 3) == 1:
+                            thumb = await generate_thumbnail()
+                        
+                        await client.send_video(
+                            chat_id=target_chat,
+                            video=file_path,
+                            caption=caption,
+                            thumb=thumb,
+                            reply_to_message_id=reply_to if not is_topic else None,
+                            message_thread_id=topic_id if is_topic else None,
+                            progress=progress_for_pyrogram,
+                            progress_args=(upload_msg, time.time(), file_data['title'])
+                        )
+                        
+                        if thumb:
+                            try:
+                                os.remove(thumb)
+                            except:
+                                pass
+                    
+                    elif file_ext in ['mp3', 'wav', 'ogg', 'flac', 'm4a', 'aac']:
+                        # Audio
+                        await client.send_audio(
+                            chat_id=target_chat,
+                            audio=file_path,
+                            caption=caption,
+                            reply_to_message_id=reply_to if not is_topic else None,
+                            message_thread_id=topic_id if is_topic else None,
+                            progress=progress_for_pyrogram,
+                            progress_args=(upload_msg, time.time(), file_data['title'])
+                        )
+                    
+                    else:
+                        # Document (PDF, APK, ZIP, RAR, etc.)
+                        await client.send_document(
+                            chat_id=target_chat,
+                            document=file_path,
+                            caption=caption,
+                            reply_to_message_id=reply_to if not is_topic else None,
+                            message_thread_id=topic_id if is_topic else None,
+                            progress=progress_for_pyrogram,
+                            progress_args=(upload_msg, time.time(), file_data['title'])
+                        )
+                    
+                    try:
+                        os.remove(file_path)
+                    except:
+                        pass
+                    
+                    success += 1
+                    await client.db.increment_downloads(user_id)
+                    
+                    if idx < len(files) and not active_tasks[user_id]['cancelled']:
+                        await asyncio.sleep(Config.FLOOD_SLEEP)
+                else:
+                    failed += 1
+                    failed_files.append(file_data['title'])
+                    
+            except Exception as e:
+                failed += 1
+                failed_files.append(file_data['title'])
+                print(f"Error: {file_data['title']}: {e}")
+                await asyncio.sleep(2)
+        
+        if active_tasks[user_id]['cancelled']:
+            cleanup_downloads()
+            await status.unpin()
+            del active_tasks[user_id]
+            return
+        
+        report = f"✅ **Complete!**\n\n"
+        report += f"📊 **Statistics:**\n"
+        report += f"✅ Success: `{success}`\n"
+        report += f"❌ Failed: `{failed}`\n"
+        report += f"📦 Total: `{len(files)}`\n\n"
+        
+        if failed_files:
+            report += f"**⚠️ Failed:**\n"
+            for fail in failed_files[:5]:
+                report += f"• `{fail[:40]}...`\n"
+            if len(failed_files) > 5:
+                report += f"• *+{len(failed_files)-5} more*\n"
+        
+        await status.edit_text(report)
+        
+        try:
+            await status.unpin()
+        except:
+            pass
+        
+        try:
+            await client.send_message(
+                Config.LOG_CHANNEL,
+                f"#BATCH_DOWNLOAD\n\n"
+                f"👤 {message.from_user.mention}\n"
+                f"🆔 `{user_id}`\n"
+                f"✅ Success: {success}\n"
+                f"❌ Failed: {failed}\n"
+                f"📅 {time.strftime('%Y-%m-%d %H:%M:%S')}"
+            )
+        except:
+            pass
+        
+        cleanup_downloads()
+        
     except Exception as e:
-        print(f"Download error for {filename}: {e}")
-        import traceback
-        traceback.print_exc()
-        return None
+        await message.reply_text(f"❌ **Error:** `{str(e)}`")
+        print(f"TXT Error: {e}")
+    
+    finally:
+        if user_id in active_tasks:
+            del active_tasks[user_id]
+
+def cleanup_downloads():
+    """Clean downloads folder"""
+    try:
+        if os.path.exists("downloads"):
+            for file in os.listdir("downloads"):
+                file_path = os.path.join("downloads", file)
+                try:
+                    if os.path.isfile(file_path):
+                        os.remove(file_path)
+                except:
+                    pass
+    except:
+        pass
