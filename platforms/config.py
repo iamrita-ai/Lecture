@@ -1,12 +1,19 @@
 """
 Platform API Configuration
-Easily update API endpoints for each platform here
+Update API endpoints here as you discover them
 """
 
 PLATFORM_CONFIGS = {
     "rgvikramjeet": {
         "name": "RG Vikramjeet",
-        "base_url": "https://rgvikramjeetapi.akamai.net.in",
+        # Updated base URLs - try multiple
+        "base_urls": [
+            "https://rgvikramjeetapi.akamai.net.in",
+            "https://www.masterapi.tech",
+            "https://api.rankersgurukul.com",
+            "https://rankersgurukul.com/api"
+        ],
+        "base_url": "https://rgvikramjeetapi.akamai.net.in",  # Primary
         "api_endpoints": {
             "login": "/api/v1/user/login",
             "send_otp": "/api/v1/user/send-otp",
@@ -15,9 +22,10 @@ PLATFORM_CONFIGS = {
             "get_batch_content": "/api/v1/course/{batch_id}/lectures"
         },
         "headers": {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Content-Type": "application/json",
             "Accept": "application/json",
+            "Accept-Language": "en-US,en;q=0.9",
             "Origin": "https://rankersgurukul.com",
             "Referer": "https://rankersgurukul.com/"
         },
@@ -26,7 +34,13 @@ PLATFORM_CONFIGS = {
             "password": "{password}"
         },
         "response_token_key": "token",
-        "response_data_key": "data"
+        "response_data_key": "data",
+        # Known working domains for content
+        "content_domains": [
+            "https://www.masterapi.tech/get/appx/signedUrl",
+            "https://www.masterapi.tech/get/appx-pdf/signedUrl",
+            "https://rgvikramjeetapi.akamai.net.in"
+        ]
     },
     
     "pw": {
@@ -49,28 +63,6 @@ PLATFORM_CONFIGS = {
         },
         "response_token_key": "token",
         "response_data_key": "data"
-    },
-    
-    "unacademy": {
-        "name": "Unacademy",
-        "base_url": "https://unacademy.com/api/v3",
-        "api_endpoints": {
-            "login": "/user/login",
-            "send_otp": "/user/login/initiate",
-            "verify_otp": "/user/login/verify",
-            "get_batches": "/user/purchases",
-            "get_batch_content": "/course/{batch_id}/lessons"
-        },
-        "headers": {
-            "User-Agent": "Mozilla/5.0",
-            "Content-Type": "application/json"
-        },
-        "login_payload_format": {
-            "phone": "{phone}",
-            "password": "{password}"
-        },
-        "response_token_key": "token",
-        "response_data_key": "subscriptions"
     },
 }
 
